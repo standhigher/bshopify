@@ -26,6 +26,7 @@ import {
 } from "#/app/runner/injections";
 import { acquireLock } from "#/app/runner/lock";
 import { refreshGitIndexForRestoredFiles } from "#/app/runner/git-refresh";
+import { currentInterruptSignal, isActiveInterrupt, runInterruptible } from "#/app/runner/interrupt";
 import { runShopifyCommand as runDefaultShopifyCommand } from "#/app/runner/shopify";
 import {
   createFileTransaction,
@@ -102,78 +103,87 @@ export async function deployProject(options: DeployOptions = {}): Promise<number
       }
     }
 
-    const transaction = await createFileTransaction(transactionPath);
-    const appliedInjections: AppliedInjection[] = [];
-    const injectionWarnings: InjectionWarning[] = [];
+    return await runInterruptible(async () => {
+      const transaction = await createFileTransaction(transactionPath);
+      const appliedInjections: AppliedInjection[] = [];
+      const injectionWarnings: InjectionWarning[] = [];
 
-    try {
-      for (const plan of plans) {
-        const result = await applyInjections(cwd, plan, transaction, {
+      try {
+        for (const plan of plans) {
+          const result = await applyInjections(cwd, plan, transaction, {
+            mode: dryRun ? "dryRun" : "deploy",
+            restoreMarkers: false,
+          });
+          appliedInjections.push(...result.applied);
+          injectionWarnings.push(...result.warnings);
+        }
+
+        const warningSummary = formatInjectionWarnings(injectionWarnings, { cwd });
+
+        if (warningSummary !== undefined) {
+          console.warn(warningSummary);
+        }
+
+        const injectionSummary = formatAppliedInjections(appliedInjections, {
+          configName: getShopifyCliConfigName(context.configPath),
+          cwd,
           mode: dryRun ? "dryRun" : "deploy",
-          restoreMarkers: false,
         });
-        appliedInjections.push(...result.applied);
-        injectionWarnings.push(...result.warnings);
+
+        if (injectionSummary !== undefined) {
+          console.log(injectionSummary);
+        }
+
+        if (config.failOnUnresolvedPlaceholders) {
+          await assertNoUnresolvedPlaceholders(cwd, config.extensionsRoot);
+        }
+
+        if (currentInterruptSignal()?.aborted) {
+          return 0;
+        }
+
+        await runBeforeDeployHooks(context, plans);
+
+        let exitCode = 0;
+
+        if (!dryRun) {
+          // `__entry.js` files are not hidden during deploy: they are harmless
+          // stray files to Shopify (extra files neither fail nor block a
+          // deploy), and the injected target files are restored by the
+          // transaction below.
+          const runShopifyCommand = createShopifyDeployRunner(options.runShopifyCommand, cwd);
+          console.log("");
+          exitCode =
+            (await runShopifyCommand([
+              "app",
+              "deploy",
+              ...formatShopifyCliConfigArgs(getShopifyCliConfigName(context.configPath)),
+              ...(options.shopifyArgs ?? []),
+            ])) ?? 0;
+        }
+
+        await runAfterDeployHooks(context, plans, {
+          deployed: !dryRun,
+          dryRun,
+          exitCode,
+        });
+
+        return exitCode;
+      } catch (error) {
+        if (!isActiveInterrupt(error)) {
+          await runOnErrorHooks(context, plans, error);
+        }
+
+        throw error;
+      } finally {
+        const restoredFiles = await transaction.restore();
+        await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
+
+        if (appliedInjections.length > 0) {
+          console.log(formatRestoreNotice(dryRun));
+        }
       }
-
-      const warningSummary = formatInjectionWarnings(injectionWarnings, { cwd });
-
-      if (warningSummary !== undefined) {
-        console.warn(warningSummary);
-      }
-
-      const injectionSummary = formatAppliedInjections(appliedInjections, {
-        configName: getShopifyCliConfigName(context.configPath),
-        cwd,
-        mode: dryRun ? "dryRun" : "deploy",
-      });
-
-      if (injectionSummary !== undefined) {
-        console.log(injectionSummary);
-      }
-
-      if (config.failOnUnresolvedPlaceholders) {
-        await assertNoUnresolvedPlaceholders(cwd, config.extensionsRoot);
-      }
-
-      await runBeforeDeployHooks(context, plans);
-
-      let exitCode = 0;
-
-      if (!dryRun) {
-        // `__entry.js` files are not hidden during deploy: they are harmless
-        // stray files to Shopify (extra files neither fail nor block a
-        // deploy), and the injected target files are restored by the
-        // transaction below.
-        const runShopifyCommand = createShopifyDeployRunner(options.runShopifyCommand, cwd);
-        console.log("");
-        exitCode =
-          (await runShopifyCommand([
-            "app",
-            "deploy",
-            ...formatShopifyCliConfigArgs(getShopifyCliConfigName(context.configPath)),
-            ...(options.shopifyArgs ?? []),
-          ])) ?? 0;
-      }
-
-      await runAfterDeployHooks(context, plans, {
-        deployed: !dryRun,
-        dryRun,
-        exitCode,
-      });
-
-      return exitCode;
-    } catch (error) {
-      await runOnErrorHooks(context, plans, error);
-      throw error;
-    } finally {
-      const restoredFiles = await transaction.restore();
-      await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
-
-      if (appliedInjections.length > 0) {
-        console.log(formatRestoreNotice(dryRun));
-      }
-    }
+    });
   } finally {
     await lock.release();
   }

@@ -22,6 +22,7 @@ import {
 } from "#/app/runner/injections";
 import { acquireLock } from "#/app/runner/lock";
 import { refreshGitIndexForRestoredFiles } from "#/app/runner/git-refresh";
+import { currentInterruptSignal, runInterruptible } from "#/app/runner/interrupt";
 import { runShopifyCommand as runDefaultShopifyCommand } from "#/app/runner/shopify";
 import {
   createFileTransaction,
@@ -70,57 +71,63 @@ export async function devProject(options: DevOptions = {}): Promise<number> {
     const plans = await preparePlans(context, hooks);
     await validatePlans(context, plans);
 
-    const transaction = await createFileTransaction(transactionPath);
-    const appliedInjections: AppliedInjection[] = [];
-    const injectionWarnings: InjectionWarning[] = [];
+    return await runInterruptible(async () => {
+      const transaction = await createFileTransaction(transactionPath);
+      const appliedInjections: AppliedInjection[] = [];
+      const injectionWarnings: InjectionWarning[] = [];
 
-    try {
-      for (const plan of plans) {
-        const result = await applyInjections(cwd, plan, transaction, {
-          mode: "dev",
-          restoreMarkers: config.restoreMarkers,
+      try {
+        for (const plan of plans) {
+          const result = await applyInjections(cwd, plan, transaction, {
+            mode: "dev",
+            restoreMarkers: config.restoreMarkers,
+          });
+          appliedInjections.push(...result.applied);
+          injectionWarnings.push(...result.warnings);
+        }
+
+        const warningSummary = formatInjectionWarnings(injectionWarnings, { cwd });
+
+        if (warningSummary !== undefined) {
+          console.warn(warningSummary);
+        }
+
+        const injectionSummary = formatAppliedInjections(appliedInjections, {
+          configName: shouldForwardCliConfig ? getShopifyCliConfigName(context.configPath) : undefined,
+          cwd,
         });
-        appliedInjections.push(...result.applied);
-        injectionWarnings.push(...result.warnings);
+
+        if (injectionSummary !== undefined) {
+          console.log(injectionSummary);
+        }
+
+        if (config.failOnUnresolvedPlaceholders) {
+          await assertNoUnresolvedPlaceholders(cwd, config.extensionsRoot);
+        }
+
+        if (currentInterruptSignal()?.aborted) {
+          return 0;
+        }
+
+        const runShopifyCommand =
+          options.runShopifyCommand ?? ((args) => runDefaultShopifyCommand(args, cwd));
+        const exitCode = await runShopifyCommand([
+          "app",
+          "dev",
+          ...(shouldForwardCliConfig ? formatShopifyCliConfigArgs(getShopifyCliConfigName(context.configPath)) : []),
+          ...shopifyArgs,
+        ]);
+
+        return exitCode ?? 0;
+      } finally {
+        const restoredFiles = await transaction.restore();
+        await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
+
+        if (appliedInjections.length > 0) {
+          console.log(formatRestoreNotice());
+        }
       }
-
-      const warningSummary = formatInjectionWarnings(injectionWarnings, { cwd });
-
-      if (warningSummary !== undefined) {
-        console.warn(warningSummary);
-      }
-
-      const injectionSummary = formatAppliedInjections(appliedInjections, {
-        configName: shouldForwardCliConfig ? getShopifyCliConfigName(context.configPath) : undefined,
-        cwd,
-      });
-
-      if (injectionSummary !== undefined) {
-        console.log(injectionSummary);
-      }
-
-      if (config.failOnUnresolvedPlaceholders) {
-        await assertNoUnresolvedPlaceholders(cwd, config.extensionsRoot);
-      }
-
-      const runShopifyCommand =
-        options.runShopifyCommand ?? ((args) => runDefaultShopifyCommand(args, cwd));
-      const exitCode = await runShopifyCommand([
-        "app",
-        "dev",
-        ...(shouldForwardCliConfig ? formatShopifyCliConfigArgs(getShopifyCliConfigName(context.configPath)) : []),
-        ...shopifyArgs,
-      ]);
-
-      return exitCode ?? 0;
-    } finally {
-      const restoredFiles = await transaction.restore();
-      await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
-
-      if (appliedInjections.length > 0) {
-        console.log(formatRestoreNotice());
-      }
-    }
+    });
   } finally {
     await lock.release();
   }

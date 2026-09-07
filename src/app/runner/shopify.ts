@@ -1,9 +1,13 @@
 import { execa } from "execa";
 import { isNodeError } from "#/utils/node";
+import { currentInterruptSignal } from "./interrupt";
 
 export async function runShopifyCommand(args: string[], cwd: string): Promise<number> {
+  const cancelSignal = currentInterruptSignal();
+
   try {
     const result = await execa("shopify", args, {
+      ...(cancelSignal === undefined ? {} : { cancelSignal }),
       cwd,
       localDir: cwd,
       preferLocal: true,
