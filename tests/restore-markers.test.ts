@@ -475,6 +475,224 @@ describe("transaction restore", () => {
     expect(restored).toContain(filePath);
     await expect(readFile(filePath, "utf8")).resolves.toBe(source);
   });
+
+  it("restores a markerless injection without rewriting a substring of the value", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-substr-"));
+    tempDirs.push(cwd);
+    const filePath = join(cwd, "shopify.extension.toml");
+    const source = [
+      'handle = "__CART_DRAWER_HANDLE__"',
+      'path = "target/wasm32-unknown-unknown/release/bestupsell-cart-drawer-discount.wasm"',
+      "",
+    ].join("\n");
+    await writeFile(filePath, source);
+
+    const journalPath = join(cwd, "transaction.json");
+    const transaction = await createFileTransaction(journalPath);
+    const composed = composeInjection(
+      source,
+      filePath,
+      "__CART_DRAWER_HANDLE__",
+      "upsell-cart-drawer-discount",
+      false,
+    );
+    await transaction.writeFile(filePath, composed.content, {
+      pattern: "__CART_DRAWER_HANDLE__",
+      value: "upsell-cart-drawer-discount",
+    });
+
+    const restored = await transaction.restore();
+
+    expect(restored).toContain(filePath);
+    await expect(readFile(filePath, "utf8")).resolves.toBe(source);
+  });
+
+  it("restores a markerless injection after later content is inserted above it", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-shift-"));
+    tempDirs.push(cwd);
+    const filePath = join(cwd, "shopify.extension.toml");
+    const source = [
+      'handle = "__CART_DRAWER_HANDLE__"',
+      'path = "target/wasm32-unknown-unknown/release/bestupsell-cart-drawer-discount.wasm"',
+      "",
+    ].join("\n");
+    await writeFile(filePath, source);
+
+    const journalPath = join(cwd, "transaction.json");
+    const transaction = await createFileTransaction(journalPath);
+    const composed = composeInjection(
+      source,
+      filePath,
+      "__CART_DRAWER_HANDLE__",
+      "upsell-cart-drawer-discount",
+      false,
+    );
+    await transaction.writeFile(filePath, composed.content, {
+      pattern: "__CART_DRAWER_HANDLE__",
+      value: "upsell-cart-drawer-discount",
+    });
+    await writeFile(filePath, `uid = "gid://shopify/Function/1"\n${composed.content}`);
+
+    await transaction.restore();
+
+    await expect(readFile(filePath, "utf8")).resolves.toBe(
+      `uid = "gid://shopify/Function/1"\n${source}`,
+    );
+  });
+
+  it("restores a markerless injection on the rewritten line and keeps other edits", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-rewrite-"));
+    tempDirs.push(cwd);
+    const filePath = join(cwd, "shopify.extension.toml");
+    const source = [
+      'handle = "__CART_DRAWER_HANDLE__"',
+      'path = "target/wasm32-unknown-unknown/release/bestupsell-cart-drawer-discount.wasm"',
+      "",
+    ].join("\n");
+    await writeFile(filePath, source);
+
+    const journalPath = join(cwd, "transaction.json");
+    const transaction = await createFileTransaction(journalPath);
+    const composed = composeInjection(
+      source,
+      filePath,
+      "__CART_DRAWER_HANDLE__",
+      "upsell-cart-drawer-discount",
+      false,
+    );
+    await transaction.writeFile(filePath, composed.content, {
+      pattern: "__CART_DRAWER_HANDLE__",
+      value: "upsell-cart-drawer-discount",
+    });
+    await writeFile(
+      filePath,
+      [
+        'uid = "gid://shopify/Function/1"',
+        'handle = "upsell-cart-drawer-discount"  # rewritten surrounding text',
+        'path = "target/wasm32-unknown-unknown/release/bestupsell-cart-drawer-discount.wasm"',
+        "",
+      ].join("\n"),
+    );
+
+    await transaction.restore();
+
+    await expect(readFile(filePath, "utf8")).resolves.toBe(
+      [
+        'uid = "gid://shopify/Function/1"',
+        'handle = "__CART_DRAWER_HANDLE__"  # rewritten surrounding text',
+        'path = "target/wasm32-unknown-unknown/release/bestupsell-cart-drawer-discount.wasm"',
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("restores two markerless injections when the later write sits earlier in the file", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-order-"));
+    tempDirs.push(cwd);
+    const filePath = join(cwd, "shopify.extension.toml");
+    const source = '__B__ = 1\n__A__ = 2\n';
+    await writeFile(filePath, source);
+
+    const journalPath = join(cwd, "transaction.json");
+    const transaction = await createFileTransaction(journalPath);
+    const first = composeInjection(source, filePath, "__A__", "aaa", false);
+    await transaction.writeFile(filePath, first.content, {
+      pattern: "__A__",
+      value: "aaa",
+    });
+    const second = composeInjection(first.content, filePath, "__B__", "bbb", false);
+    await transaction.writeFile(filePath, second.content, {
+      pattern: "__B__",
+      value: "bbb",
+    });
+
+    await transaction.restore();
+
+    await expect(readFile(filePath, "utf8")).resolves.toBe(source);
+  });
+
+  it("does not rewrite a leftover substring after marker restore", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-marker-substr-"));
+    tempDirs.push(cwd);
+    const filePath = join(cwd, "shopify.extension.toml");
+    const source = [
+      'handle = "__CART_DRAWER_HANDLE__"',
+      'path = "target/wasm32-unknown-unknown/release/bestupsell-cart-drawer-discount.wasm"',
+      "",
+    ].join("\n");
+    await writeFile(filePath, source);
+
+    const journalPath = join(cwd, "transaction.json");
+    const transaction = await createFileTransaction(journalPath);
+    const composed = composeInjection(
+      source,
+      filePath,
+      "__CART_DRAWER_HANDLE__",
+      "upsell-cart-drawer-discount",
+      true,
+    );
+    await transaction.writeFile(filePath, composed.content, {
+      marker: composed.marker,
+      pattern: "__CART_DRAWER_HANDLE__",
+      value: "upsell-cart-drawer-discount",
+    });
+
+    await transaction.restore();
+
+    await expect(readFile(filePath, "utf8")).resolves.toBe(source);
+  });
+
+  it("does not rewrite a substring collision from a legacy markerless journal", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-legacy-substr-"));
+    tempDirs.push(cwd);
+    const filePath = join(cwd, "shopify.extension.toml");
+    const source = [
+      'handle = "__CART_DRAWER_HANDLE__"',
+      'path = "target/wasm32-unknown-unknown/release/bestupsell-cart-drawer-discount.wasm"',
+      "",
+    ].join("\n");
+    const composed = composeInjection(
+      source,
+      filePath,
+      "__CART_DRAWER_HANDLE__",
+      "upsell-cart-drawer-discount",
+      false,
+    );
+    await writeFile(filePath, composed.content);
+    const journalPath = join(cwd, "transaction.json");
+    await writeJournalWithReplacements(journalPath, filePath, [
+      {
+        pattern: "__CART_DRAWER_HANDLE__",
+        value: "upsell-cart-drawer-discount",
+      },
+    ]);
+
+    await restoreFileTransactionJournal(journalPath);
+
+    await expect(readFile(filePath, "utf8")).resolves.toBe(source);
+  });
+
+  it("restores an unparseable adjacent marker from the journal without a substring rewrite", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-stale-adj-"));
+    tempDirs.push(cwd);
+    const filePath = join(cwd, "blocks", "app-embed.liquid");
+    await mkdir(join(cwd, "blocks"), { recursive: true });
+    const marker = "{% comment %} bshopify-restore:stale {% endcomment %}";
+    const source = '<div data-api-base="__SHOPIFY_APP_PROXY_BASE__"></div>\n';
+    await writeFile(filePath, `<div data-api-base="/apps/fixture-dev${marker}"></div>\n`);
+    const journalPath = join(cwd, "transaction.json");
+    await writeJournalWithReplacements(journalPath, filePath, [
+      {
+        marker,
+        pattern: "__SHOPIFY_APP_PROXY_BASE__",
+        value: "/apps/fixture-dev",
+      },
+    ]);
+
+    await restoreFileTransactionJournal(journalPath);
+
+    await expect(readFile(filePath, "utf8")).resolves.toBe(source);
+  });
 });
 
 async function writeJournalWithReplacements(

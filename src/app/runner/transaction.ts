@@ -1,6 +1,7 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { isRecord } from "#/utils/objects";
 import { isNodeError } from "#/utils/node";
+import { restoreJournalReplacement } from "./restore-journal";
 import { restoreInjectedMarkers } from "./restore-markers";
 import type { FileTransaction, ReverseReplacement, TrackedFile } from "./types";
 
@@ -54,21 +55,16 @@ async function restoreTrackedFiles(files: TrackedFile[]): Promise<string[]> {
   for (const file of files.slice().reverse()) {
     let content = await readFile(file.path, "utf8");
 
-    // Primary restore path: reverse the injections recorded in the file
-    // itself. This works even when the journal is lost or stale (e.g. a
-    // killed dev process), because the marker carries the full record.
+    // Marker path: reverse the injections recorded in the file itself. This
+    // works even when the journal is lost or stale, because the marker
+    // carries the full record. User edits outside the injected span are kept.
     content = restoreInjectedMarkers(content);
 
-    // Journal fallback for injections written without markers (legacy
-    // restoreMarkers: false runs). No-op when the marker path already
-    // restored the same injection.
+    // Markerless path (deploy): restore complete tokens on each line so a
+    // wasm path that contains the injected handle is left untouched, while
+    // uid lines and rewritten spacing around the handle are kept.
     for (const replacement of file.replacements.slice().reverse()) {
-      const restoreTarget =
-        replacement.marker === undefined
-          ? replacement.value
-          : `${replacement.value}${replacement.marker}`;
-
-      content = content.split(restoreTarget).join(replacement.pattern);
+      content = restoreJournalReplacement(content, replacement);
     }
 
     await writeFile(file.path, content);

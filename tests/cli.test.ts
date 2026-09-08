@@ -2040,6 +2040,68 @@ describe("deployProject", () => {
     expect(runShopifyCommand).toHaveBeenCalledWith(["app", "deploy", "--config", "test"]);
   });
 
+  it("restores deploy injections without rewriting unrelated substrings of the value", async () => {
+    const cwd = await createDevProject();
+    await writeFile(
+      join(cwd, "shopify.app.test.toml"),
+      [
+        ...createShopifyBasicConfig("https://test.example.com"),
+        "",
+        "[app_proxy]",
+        'prefix = "apps"',
+        'subpath = "fixture-test"',
+        'url = "https://example.test/proxy"',
+        "",
+      ].join("\n"),
+    );
+    const extensionRoot = join(cwd, "extensions", "cart-drawer-discount");
+    const tomlPath = join(extensionRoot, "shopify.extension.toml");
+    const source = [
+      'handle = "__CART_DRAWER_HANDLE__"',
+      'path = "target/wasm32-unknown-unknown/release/bestupsell-cart-drawer-discount.wasm"',
+      "",
+    ].join("\n");
+    await mkdir(extensionRoot, { recursive: true });
+    await writeFile(tomlPath, source);
+    await writeFile(
+      join(extensionRoot, "__entry.js"),
+      [
+        "export default {",
+        "  async prepare() {",
+        "    return {",
+        "      injections: [",
+        "        {",
+        '          file: "shopify.extension.toml",',
+        '          strategy: "replace",',
+        '          pattern: "__CART_DRAWER_HANDLE__",',
+        '          value: "upsell-cart-drawer-discount",',
+        "        },",
+        "      ],",
+        "    };",
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+    );
+    const runShopifyCommand = vi.fn(async () => {
+      const current = await readFile(tomlPath, "utf8");
+      expect(current).toContain('handle = "upsell-cart-drawer-discount"');
+      expect(current).toContain("bestupsell-cart-drawer-discount.wasm");
+      expect(current).not.toContain("bshopify-restore:");
+      return 0;
+    });
+
+    const exitCode = await deployProject({
+      configName: "test",
+      cwd,
+      runShopifyCommand,
+      yes: true,
+    });
+
+    await expect(readFile(tomlPath, "utf8")).resolves.toBe(source);
+    expect(exitCode).toBe(0);
+  });
+
   it("injects custom envFiles values during deploy dry-runs", async () => {
     const cwd = await createDevProject();
     await writeFile(
