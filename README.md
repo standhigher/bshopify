@@ -24,6 +24,19 @@ Only extension environment awareness is available today. New capabilities will b
 - Node.js >= 22.12.0
 - [Shopify CLI](https://shopify.dev/docs/api/shopify-cli) installed globally or in the project
 
+## Built by standhigher
+
+`@standhigher/bshopify` is built by standhigher for Shopify app teams. Explore
+[standhigher Products](https://standhigher.github.io/shopify-polaris-charts/products/?utm_source=GitHub&utm_medium=social&utm_content=standhigher-bshopify)
+to discover apps that help merchants grow.
+
+| App | What it helps with |
+| --- | --- |
+| [BestTrack](https://apps.shopify.com/besttrack?utm_source=GitHub&utm_medium=social) | Order tracking and post-purchase customer experience. |
+| [BestUpsell](https://apps.shopify.com/bestupsellapp?utm_source=GitHub&utm_medium=social) | Upsell offers designed to increase average order value. |
+| [BestFeed AI](https://apps.shopify.com/bestfeed?locale=zh-CN&utm_source=GitHub&utm_medium=social) | AI-assisted product feeds that help products perform across channels. |
+| [SonarFulfill](https://apps.shopify.com/sonarfulfill?locale=zh-CN&utm_source=GitHub&utm_medium=social) | Fulfillment workflows that help keep orders moving. |
+
 ## Install
 
 Install as a local dependency inside a Shopify app project (recommended):

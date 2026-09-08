@@ -24,6 +24,19 @@
 - Node.js >= 22.12.0
 - 本机或项目内已安装 [Shopify CLI](https://shopify.dev/docs/api/shopify-cli)
 
+## Built by standhigher
+
+`@standhigher/bshopify` 由 standhigher 为 Shopify App 团队打造。欢迎访问
+[standhigher Products](https://standhigher.github.io/shopify-polaris-charts/products/?utm_source=GitHub&utm_medium=social&utm_content=standhigher-bshopify)，
+探索帮助商家增长的应用。
+
+| App | 可帮助您 |
+| --- | --- |
+| [BestTrack](https://apps.shopify.com/besttrack?utm_source=GitHub&utm_medium=social) | 改善订单追踪与购后客户体验。 |
+| [BestUpsell](https://apps.shopify.com/bestupsellapp?utm_source=GitHub&utm_medium=social) | 通过 Upsell 优惠提升客单价。 |
+| [BestFeed AI](https://apps.shopify.com/bestfeed?locale=zh-CN&utm_source=GitHub&utm_medium=social) | 通过 AI 辅助商品 Feed，帮助商品在各渠道获得更好表现。 |
+| [SonarFulfill](https://apps.shopify.com/sonarfulfill?locale=zh-CN&utm_source=GitHub&utm_medium=social) | 通过履约工作流帮助订单持续流转。 |
+
 ## 安装
 
 在 Shopify app 项目里作为开发依赖安装（推荐）：
