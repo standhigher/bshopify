@@ -105,6 +105,11 @@ export async function devProject(options: DevOptions = {}): Promise<number> {
           await assertNoUnresolvedPlaceholders(cwd, config.extensionsRoot);
         }
 
+        await refreshGitIndexForRestoredFiles(
+          cwd,
+          appliedInjections.map((injection) => injection.path),
+        );
+
         if (currentInterruptSignal()?.aborted) {
           return 0;
         }
