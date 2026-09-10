@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { confirm } from "@inquirer/prompts";
 import { bshopifyStateDir } from "#/app/runner/constants";
 import {
-  formatShopifyCliConfigArgs,
+  formatShopifyCliForwardedArgs,
   getShopifyCliConfigName,
   loadRunnerConfig,
 } from "#/app/runner/config";
@@ -162,8 +162,7 @@ export async function deployProject(options: DeployOptions = {}): Promise<number
             (await runShopifyCommand([
               "app",
               "deploy",
-              ...formatShopifyCliConfigArgs(getShopifyCliConfigName(context.configPath)),
-              ...(options.shopifyArgs ?? []),
+              ...formatShopifyCliForwardedArgs(context.configPath, options.shopifyArgs ?? []),
             ])) ?? 0;
         }
 

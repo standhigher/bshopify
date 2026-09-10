@@ -571,7 +571,49 @@ describe("bshopify CLI", () => {
     });
   });
 
-  it("dispatches bshopify app dev args without forcing the default config", async () => {
+  it("keeps the default dev config when --reset is passed without --", async () => {
+    const runDev = vi.fn(async () => 0);
+
+    await createCliProgram({ runDev }).parseAsync([
+      "node",
+      "bshopify",
+      "app",
+      "dev",
+      "--cwd",
+      "/tmp/shopify-app",
+      "--reset",
+    ]);
+
+    expect(runDev).toHaveBeenCalledWith({
+      configName: "dev",
+      cwd: "/tmp/shopify-app",
+      shopifyArgs: ["--reset"],
+    });
+  });
+
+  it("maps -c to the bshopify configFiles key", async () => {
+    const runDev = vi.fn(async () => 0);
+
+    await createCliProgram({ runDev }).parseAsync([
+      "node",
+      "bshopify",
+      "app",
+      "dev",
+      "--cwd",
+      "/tmp/shopify-app",
+      "-c",
+      "test",
+      "--reset",
+    ]);
+
+    expect(runDev).toHaveBeenCalledWith({
+      configName: "test",
+      cwd: "/tmp/shopify-app",
+      shopifyArgs: ["--reset"],
+    });
+  });
+
+  it("does not treat --config after -- as a bshopify configFiles key", async () => {
     const runDev = vi.fn(async () => 0);
 
     await createCliProgram({ runDev }).parseAsync([
@@ -582,13 +624,15 @@ describe("bshopify CLI", () => {
       "--cwd",
       "/tmp/shopify-app",
       "--",
+      "--config",
+      "test",
       "--reset",
     ]);
 
     expect(runDev).toHaveBeenCalledWith({
-      configName: undefined,
+      configName: "dev",
       cwd: "/tmp/shopify-app",
-      shopifyArgs: ["--reset"],
+      shopifyArgs: ["--config", "test", "--reset"],
     });
   });
 
@@ -1216,7 +1260,7 @@ describe("devProject", () => {
     );
   });
 
-  it("omits Shopify CLI config args for the default app config file", async () => {
+  it("forwards the default app config file to Shopify CLI", async () => {
     const cwd = await createDevProject();
     await writeFile(
       join(cwd, "bshopify.config.mjs"),
@@ -1252,16 +1296,107 @@ describe("devProject", () => {
 
     await devProject({ cwd, runShopifyCommand });
 
-    expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev"]);
+    expect(runShopifyCommand).toHaveBeenCalledWith([
+      "app",
+      "dev",
+      "--config",
+      "shopify.app.toml",
+    ]);
   });
 
-  it("passes dev Shopify args without injecting the default CLI config arg", async () => {
+  it("forwards the default CLI config when passing Shopify args such as --reset", async () => {
     const cwd = await createDevProject();
     const runShopifyCommand = vi.fn(async () => 0);
 
     await devProject({ cwd, runShopifyCommand, shopifyArgs: ["--reset"] });
 
-    expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--reset"]);
+    expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--config", "dev", "--reset"]);
+  });
+
+  it("forwards the selected config together with extra Shopify args", async () => {
+    const cwd = await createDevProject();
+    await writeFile(
+      join(cwd, "shopify.app.test.toml"),
+      [
+        'name = "fixture"',
+        'client_id = "client-id"',
+        "",
+        "[app_proxy]",
+        'prefix = "apps"',
+        'subpath = "fixture-test"',
+        'url = "https://example.test/proxy"',
+        "",
+      ].join("\n"),
+    );
+    const runShopifyCommand = vi.fn(async () => 0);
+
+    await devProject({
+      configName: "test",
+      cwd,
+      runShopifyCommand,
+      shopifyArgs: ["--reset"],
+    });
+
+    expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--config", "test", "--reset"]);
+  });
+
+  it("ignores --config in extra Shopify args and keeps the selected config", async () => {
+    const cwd = await createDevProject();
+    const runShopifyCommand = vi.fn(async () => 0);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      await devProject({
+        cwd,
+        runShopifyCommand,
+        shopifyArgs: ["--config", "test", "--reset"],
+      });
+      expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--config", "dev", "--reset"]);
+      expect(warn.mock.calls.map(([message]) => String(message)).join("\n")).toContain(
+        "Ignored --config / -c in extra Shopify args",
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("forwards shopify.app.toml when it is the configured dev file and extra args are present", async () => {
+    const cwd = await createDevProject();
+    await writeFile(
+      join(cwd, "bshopify.config.mjs"),
+      [
+        "export default {",
+        "  configFiles: {",
+        '    dev: "shopify.app.toml",',
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      join(cwd, "shopify.app.toml"),
+      [
+        'name = "fixture"',
+        'client_id = "client-id"',
+        "",
+        "[app_proxy]",
+        'prefix = "apps"',
+        'subpath = "fixture-default"',
+        'url = "https://example.test/proxy"',
+        "",
+      ].join("\n"),
+    );
+    const runShopifyCommand = vi.fn(async () => 0);
+
+    await devProject({ cwd, runShopifyCommand, shopifyArgs: ["--reset"] });
+
+    expect(runShopifyCommand).toHaveBeenCalledWith([
+      "app",
+      "dev",
+      "--config",
+      "shopify.app.toml",
+      "--reset",
+    ]);
   });
 
   it("prints the dev placeholder injection details with color", async () => {
@@ -1883,7 +2018,7 @@ describe("deployProject", () => {
     ).rejects.toThrow("bshopify configFiles.test must be a root-level Shopify app config file");
   });
 
-  it("omits Shopify CLI config args for the default app deploy config file", async () => {
+  it("forwards the default app deploy config file to Shopify CLI", async () => {
     const cwd = await createDevProject();
     await writeFile(
       join(cwd, "bshopify.config.mjs"),
@@ -1921,7 +2056,12 @@ describe("deployProject", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(runShopifyCommand).toHaveBeenCalledWith(["app", "deploy"]);
+    expect(runShopifyCommand).toHaveBeenCalledWith([
+      "app",
+      "deploy",
+      "--config",
+      "shopify.app.toml",
+    ]);
   });
 
   it("requires Shopify basic fields for deploy configs", async () => {

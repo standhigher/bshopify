@@ -86,7 +86,7 @@ export function createAppCommand(dependencies: AppCommandDependencies = {}): Com
   appCommand
     .command("deploy")
     .description("Deploy a Shopify app with temporary extension config injection.")
-    .option("--config <name>", "bshopify configFiles key to deploy")
+    .option("-c, --config <name>", "bshopify configFiles key to deploy")
     .option("--cwd <path>", "project directory to deploy")
     .option("--dry-run", "prepare and validate deploy injections without calling Shopify CLI")
     .option("--yes", "skip interactive deploy confirmation")
@@ -104,7 +104,7 @@ export function createAppCommand(dependencies: AppCommandDependencies = {}): Com
   appCommand
     .command("dev")
     .description("Run Shopify app dev with temporary extension config injection.")
-    .option("--config <name>", "bshopify configFiles key to run")
+    .option("-c, --config <name>", "bshopify configFiles key to run")
     .option("--cwd <path>", "project directory to run")
     .allowUnknownOption(true)
     .argument("[shopifyArgs...]", "extra arguments passed to Shopify CLI after --")
@@ -142,12 +142,10 @@ function toDevOptions(
   options: DevCommandOptions,
   shopifyArgs: string[] | undefined,
 ): DevOptions {
-  const extraShopifyArgs = shopifyArgs ?? [];
-
   return {
-    configName: options.config ?? (extraShopifyArgs.length === 0 ? "dev" : undefined),
+    configName: options.config ?? "dev",
     cwd: options.cwd,
-    shopifyArgs: extraShopifyArgs,
+    shopifyArgs: shopifyArgs ?? [],
   };
 }
 

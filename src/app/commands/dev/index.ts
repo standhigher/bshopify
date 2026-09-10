@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { bshopifyStateDir } from "#/app/runner/constants";
 import {
-  formatShopifyCliConfigArgs,
+  formatShopifyCliForwardedArgs,
   getShopifyCliConfigName,
   loadRunnerConfig,
 } from "#/app/runner/config";
@@ -36,7 +36,6 @@ export async function devProject(options: DevOptions = {}): Promise<number> {
   const cwd = options.cwd ?? process.cwd();
   const configName = options.configName ?? "dev";
   const shopifyArgs = options.shopifyArgs ?? [];
-  const shouldForwardCliConfig = options.configName !== undefined || shopifyArgs.length === 0;
   const config = await loadRunnerConfig(cwd);
   const { context, envFileSummary, envFileWarnings } = await createRunnerContext({
     configName,
@@ -92,8 +91,9 @@ export async function devProject(options: DevOptions = {}): Promise<number> {
           console.warn(warningSummary);
         }
 
+        const cliConfigName = getShopifyCliConfigName(context.configPath);
         const injectionSummary = formatAppliedInjections(appliedInjections, {
-          configName: shouldForwardCliConfig ? getShopifyCliConfigName(context.configPath) : undefined,
+          configName: cliConfigName,
           cwd,
         });
 
@@ -119,8 +119,7 @@ export async function devProject(options: DevOptions = {}): Promise<number> {
         const exitCode = await runShopifyCommand([
           "app",
           "dev",
-          ...(shouldForwardCliConfig ? formatShopifyCliConfigArgs(getShopifyCliConfigName(context.configPath)) : []),
-          ...shopifyArgs,
+          ...formatShopifyCliForwardedArgs(context.configPath, shopifyArgs),
         ]);
 
         return exitCode ?? 0;

@@ -905,7 +905,7 @@ describe("initProject", () => {
       },
     });
 
-    expect(generated).toEqual(["app config link"]);
+    expect(generated).toEqual(["app config link --config shopify.app.toml"]);
     expect(result.errors).toEqual([]);
     expect(result.created).toContain("shopify.app.toml");
     expect(result.created).not.toContain("shopify.app.dev.toml");
@@ -1001,7 +1001,7 @@ describe("initProject", () => {
     expect(result.errors).toContain("missing shopify.app.test.toml");
     expect(result.errors).toContain("missing shopify.app.production.toml");
     expect(result.warnings).toContain(
-      "shopify app config link did not create shopify.app.toml",
+      "shopify app config link --config shopify.app.toml did not create shopify.app.toml",
     );
   });
 

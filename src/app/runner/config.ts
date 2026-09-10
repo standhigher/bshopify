@@ -70,12 +70,12 @@ export async function loadRunnerConfig(cwd: string): Promise<RunnerConfig> {
   };
 }
 
-export function getShopifyCliConfigName(configFile: string): string | undefined {
+export function getShopifyCliConfigName(configFile: string): string {
   const fileName = basename(configFile);
   const withoutToml = fileName.endsWith(".toml") ? fileName.slice(0, -".toml".length) : fileName;
 
   if (withoutToml === "shopify.app") {
-    return undefined;
+    return fileName;
   }
 
   return withoutToml.startsWith("shopify.app.")
@@ -84,7 +84,58 @@ export function getShopifyCliConfigName(configFile: string): string | undefined 
 }
 
 export function formatShopifyCliConfigArgs(configName: string | undefined): string[] {
-  return configName === undefined ? [] : ["--config", configName];
+  return configName === undefined || configName.length === 0 ? [] : ["--config", configName];
+}
+
+export function withoutShopifyCliConfigArgs(args: string[]): string[] {
+  const result: string[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === undefined) {
+      continue;
+    }
+
+    if (arg === "--config" || arg === "-c") {
+      const next = args[index + 1];
+
+      if (next !== undefined && !next.startsWith("-")) {
+        index += 1;
+      }
+
+      continue;
+    }
+
+    if (arg.startsWith("--config=") || arg.startsWith("-c=")) {
+      continue;
+    }
+
+    result.push(arg);
+  }
+
+  return result;
+}
+
+export function formatShopifyCliForwardedArgs(
+  configFile: string,
+  shopifyArgs: string[] = [],
+): string[] {
+  const forwardedArgs = withoutShopifyCliConfigArgs(shopifyArgs);
+
+  if (forwardedArgs.length !== shopifyArgs.length) {
+    console.warn(
+      colorize(
+        "Ignored --config / -c in extra Shopify args. Use bshopify --config <key> to select a configFiles environment.",
+        ansi.yellow,
+      ),
+    );
+  }
+
+  return [
+    ...formatShopifyCliConfigArgs(getShopifyCliConfigName(configFile)),
+    ...forwardedArgs,
+  ];
 }
 
 function validateConfigFiles(configFiles: Record<string, string>): Record<string, string> {
