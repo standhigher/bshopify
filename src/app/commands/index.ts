@@ -48,7 +48,7 @@ export function createAppCommand(dependencies: AppCommandDependencies = {}): Com
   const runDev = dependencies.runDev ?? devProject;
   const initializeProject = dependencies.initProject ?? initProject;
   const appCommand = new Command("app").description(
-    "BestFulfill wrappers for Shopify app commands.",
+    "Standhigher wrappers for Shopify app commands.",
   );
   appCommand.addHelpCommand(false);
 

@@ -26,7 +26,7 @@ export function createCliProgram(dependencies: CliDependencies = {}): Command {
 
   program
     .name("bshopify")
-    .description("BestFulfill Shopify App Runner")
+    .description("Standhigher Shopify App Runner")
     .version(packageInfo.version)
     .addHelpCommand(false)
     .showHelpAfterError();
