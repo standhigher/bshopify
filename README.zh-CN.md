@@ -199,3 +199,7 @@ export default {
 ```
 
 `file` 相对当前 extension 目录；`pattern` 必须在目标文件中唯一匹配。可选钩子还有 `validate` / `beforeDeploy` / `afterDeploy` / `onError`，部署链路会按顺序调用。
+
+## 更新日志
+
+见 [0.1.x](./docs/changelog/0.1.md)。

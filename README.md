@@ -199,3 +199,7 @@ export default {
 ```
 
 `file` is relative to the current extension directory; `pattern` must match uniquely in the target file. Optional hooks `validate` / `beforeDeploy` / `afterDeploy` / `onError` run on the deploy path in that order.
+
+## Changelog
+
+See [0.1.x](./docs/changelog/0.1.md).
