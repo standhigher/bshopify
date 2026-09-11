@@ -1,18 +1,13 @@
 import { execFile } from "node:child_process";
-import { rm, stat } from "node:fs/promises";
-import { isAbsolute, join, relative } from "node:path";
+import { isAbsolute, relative } from "node:path";
 import { promisify } from "node:util";
-import { isNodeError } from "#/utils/node";
+import { recoverStaleGitIndexLock } from "./git-index-lock";
 
 const execFileAsync = promisify(execFile);
 
 const gitCommandTimeoutMs = 30_000;
 const gitIndexLockRetryMs = 200;
 const gitIndexLockRetryDeadlineMs = 5_000;
-const lsofTimeoutMs = 2_000;
-const lsofCommands = ["/usr/sbin/lsof", "lsof"] as const;
-
-type LsofLockState = "in-use" | "not-in-use" | "unknown";
 
 /**
  * Refreshes the git index stat cache for files whose cleaned working tree
@@ -40,10 +35,7 @@ type LsofLockState = "in-use" | "not-in-use" | "unknown";
  * never stages user work. Everything is best-effort and never fails the
  * surrounding dev/deploy/clear flow.
  *
- * `git add` takes `index.lock`. Editors (and a killed filter process) often
- * leave that file behind, which is why injections stay in Source Control and
- * a manual `git add` then errors with "index.lock: File exists". Stale locks
- * are removed only when lsof confirms there is no holder. Live lock
+ * `git add` takes `index.lock`. Stale locks are recovered first. Live lock
  * contention is retried for a few seconds. A timed-out `git add` is not
  * retried: the hung process is cleaned up once, then refresh gives up.
  */
@@ -135,70 +127,6 @@ async function execGit(cwd: string, args: string[]): Promise<{ stdout: string; s
   return { stderr, stdout };
 }
 
-async function recoverStaleGitIndexLock(cwd: string): Promise<void> {
-  const lockPath = await resolveGitIndexLockPath(cwd);
-
-  if (lockPath === undefined) {
-    return;
-  }
-
-  try {
-    await stat(lockPath);
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return;
-    }
-
-    throw error;
-  }
-
-  if (await isGitIndexLockInUse(lockPath)) {
-    return;
-  }
-
-  await rm(lockPath, { force: true });
-}
-
-async function resolveGitIndexLockPath(cwd: string): Promise<string | undefined> {
-  try {
-    const { stdout } = await execGit(cwd, ["rev-parse", "--git-path", "index.lock"]);
-    const gitPath = stdout.trim();
-
-    if (gitPath.length === 0) {
-      return undefined;
-    }
-
-    return isAbsolute(gitPath) ? gitPath : join(cwd, gitPath);
-  } catch {
-    return undefined;
-  }
-}
-
-async function isGitIndexLockInUse(lockPath: string): Promise<boolean> {
-  return (await probeLsof(lockPath)) !== "not-in-use";
-}
-
-async function probeLsof(lockPath: string): Promise<LsofLockState> {
-  for (const command of lsofCommands) {
-    try {
-      const { stdout } = await execFileAsync(command, ["-t", lockPath], {
-        encoding: "utf8",
-        timeout: lsofTimeoutMs,
-      });
-      return stdout.trim().length > 0 ? "in-use" : "not-in-use";
-    } catch (error) {
-      // lsof exits 1 when no process has the file open.
-      if (isExitCode(error, 1)) {
-        return "not-in-use";
-      }
-    }
-  }
-
-  // lsof missing or failed: do not delete the lock. A live `git add` can
-  // leave a 0-byte lock while clean filters run.
-  return "unknown";
-}
-
 function isGitIndexLockError(error: unknown): boolean {
   return gitErrorText(error).includes("index.lock");
 }
@@ -210,10 +138,6 @@ function isGitCommandTimeout(error: unknown): boolean {
 
   const record = error as { killed?: unknown; signal?: unknown };
   return record.killed === true || record.signal === "SIGTERM" || record.signal === "SIGKILL";
-}
-
-function isExitCode(error: unknown, code: number): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
 function gitErrorText(error: unknown): string {
