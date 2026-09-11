@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation / 文档
+    url: https://github.com/standhigher/bshopify/blob/main/README.md
+    about: Read the README first. 先看 README 再开 Issue。
+  - name: Security report / 安全报告
+    url: https://github.com/standhigher/bshopify/security/advisories/new
+    about: Privately report a vulnerability. 请私下报告安全漏洞，不要开公开 Issue。

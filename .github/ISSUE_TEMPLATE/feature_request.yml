@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a capability that fits the Enhanced Shopify CLI
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        bshopify is an upper-layer wrapper around official Shopify CLI.
+        Unextended commands should keep passing through to `shopify`.
+        bshopify 是官方 Shopify CLI 的上层封装；未扩展命令应继续透传。
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / 要解决的问题
+      description: What is painful today, and who hits it?
+      placeholder: Switching between shopify.app.*.toml during deploy is easy to get wrong...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal / 建议方案
+      description: The smallest change that would help. Mention the Shopify CLI command it would wrap if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / 其他方案
+      description: What you already tried, or why this should live in bshopify instead of a script.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check / 范围确认
+      options:
+        - label: This enhances or orchestrates an existing `shopify` command, rather than replacing Shopify CLI.
+          required: true

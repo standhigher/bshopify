@@ -1,0 +1,78 @@
+name: Bug report
+description: Report a bshopify defect with enough context to reproduce it
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please fill in the sections below so we can reproduce the issue.
+        请尽量补全以下信息，方便复现。
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened / 发生了什么
+      description: A short summary of the unexpected behavior.
+      placeholder: bshopify app deploy left placeholders in the extension file...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      description: Exact commands and a minimal project setup if possible.
+      placeholder: |
+        1. npm install -D @standhigher/bshopify
+        2. bshopify app init
+        3. bshopify app deploy --config production
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected / 期望结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual / 实际结果
+      description: Paste relevant CLI output. Redact tokens and shop domains if needed.
+    validations:
+      required: true
+  - type: input
+    id: bshopify-version
+    attributes:
+      label: bshopify version
+      description: Output of `bshopify --version` or the installed `@standhigher/bshopify` version.
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Output of `node --version`. Required runtime is >= 22.12.0.
+    validations:
+      required: true
+  - type: input
+    id: shopify-cli-version
+    attributes:
+      label: Shopify CLI version
+      description: Output of `shopify version` if the command reached Shopify CLI.
+  - type: dropdown
+    id: command
+    attributes:
+      label: Command / 相关命令
+      multiple: true
+      options:
+        - bshopify app init
+        - bshopify app dev
+        - bshopify app deploy
+        - bshopify app clear
+        - passthrough / 透传 shopify
+        - other
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra context / 补充信息
+      description: OS, relevant `bshopify.config.mjs`, or `__entry.js` snippets. Do not paste secrets.
