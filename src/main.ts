@@ -7,6 +7,7 @@ import {
   type AppCommandDependencies,
 } from "./app/commands";
 import { packageInfo } from "./utils/package-json";
+import { notifyIfOutdated } from "./utils/update-notifier";
 
 export type ShopifyCommandRunner = (args: string[]) => Promise<number | void>;
 export type ProcessRunner = (
@@ -16,6 +17,7 @@ export type ProcessRunner = (
 ) => Promise<{ exitCode?: number }>;
 
 export interface CliDependencies extends AppCommandDependencies {
+  notifyIfOutdated?: typeof notifyIfOutdated;
   runShopifyCommand?: ShopifyCommandRunner;
 }
 
@@ -39,6 +41,8 @@ export async function runCli(
   dependencies: CliDependencies = {},
 ): Promise<void> {
   const args = argv.slice(2);
+  const checkForUpdate = dependencies.notifyIfOutdated ?? notifyIfOutdated;
+  await checkForUpdate({ args });
 
   if (shouldHandleLocally(args)) {
     await createCliProgram(dependencies).parseAsync(argv);

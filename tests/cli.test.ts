@@ -659,12 +659,27 @@ describe("bshopify CLI", () => {
     });
   });
 
+  it("checks for package updates before running a command", async () => {
+    const notifyIfOutdated = vi.fn(async () => undefined);
+    const runShopifyCommand = vi.fn(async () => 0);
+
+    await runCli(
+      ["node", "bshopify", "theme", "dev", "--store", "example.myshopify.com"],
+      { notifyIfOutdated, runShopifyCommand },
+    );
+
+    expect(notifyIfOutdated).toHaveBeenCalledWith({
+      args: ["theme", "dev", "--store", "example.myshopify.com"],
+    });
+    expect(runShopifyCommand).toHaveBeenCalled();
+  });
+
   it("falls back to the Shopify CLI for commands bshopify does not intercept", async () => {
     const runShopifyCommand = vi.fn(async () => 0);
 
     await runCli(
       ["node", "bshopify", "theme", "dev", "--store", "example.myshopify.com"],
-      { runShopifyCommand },
+      { notifyIfOutdated: async () => undefined, runShopifyCommand },
     );
 
     expect(runShopifyCommand).toHaveBeenCalledWith([
@@ -679,6 +694,7 @@ describe("bshopify CLI", () => {
     const runShopifyCommand = vi.fn(async () => 0);
 
     await runCli(["node", "bshopify", "help", "theme", "dev"], {
+      notifyIfOutdated: async () => undefined,
       runShopifyCommand,
     });
 
@@ -688,7 +704,10 @@ describe("bshopify CLI", () => {
   it("keeps the generated pre-commit app guard command local", async () => {
     const runShopifyCommand = vi.fn(async () => 0);
 
-    await runCli(["node", "bshopify", "app", "guard"], { runShopifyCommand });
+    await runCli(["node", "bshopify", "app", "guard"], {
+      notifyIfOutdated: async () => undefined,
+      runShopifyCommand,
+    });
 
     expect(runShopifyCommand).not.toHaveBeenCalled();
   });
@@ -696,7 +715,10 @@ describe("bshopify CLI", () => {
   it("falls back top-level guard to Shopify because guard is app-scoped", async () => {
     const runShopifyCommand = vi.fn(async () => 0);
 
-    await runCli(["node", "bshopify", "guard"], { runShopifyCommand });
+    await runCli(["node", "bshopify", "guard"], {
+      notifyIfOutdated: async () => undefined,
+      runShopifyCommand,
+    });
 
     expect(runShopifyCommand).toHaveBeenCalledWith(["guard"]);
   });
@@ -704,7 +726,10 @@ describe("bshopify CLI", () => {
   it("falls back through the user's Shopify CLI installation", async () => {
     const runShopifyCommand = vi.fn(async () => 0);
 
-    await runCli(["node", "bshopify", "theme", "pull"], { runShopifyCommand });
+    await runCli(["node", "bshopify", "theme", "pull"], {
+      notifyIfOutdated: async () => undefined,
+      runShopifyCommand,
+    });
 
     expect(runShopifyCommand).toHaveBeenCalledWith(["theme", "pull"]);
   });
