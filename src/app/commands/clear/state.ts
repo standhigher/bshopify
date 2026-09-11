@@ -39,10 +39,7 @@ export async function restorePendingTransaction(
 
   try {
     const restoredFiles = await restoreFileTransactionJournal(journalPath);
-
-    if (restoredFiles.length > 0) {
-      await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
-    }
+    await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
 
     result.updated.push(
       restoredFiles.length > 0

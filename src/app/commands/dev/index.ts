@@ -20,9 +20,10 @@ import {
   formatAppliedInjections,
   formatInjectionWarnings,
 } from "#/app/runner/injections";
-import { acquireLock } from "#/app/runner/lock";
+import { withGitIndexLockGuard } from "#/app/runner/git-index-lock-guard";
 import { refreshGitIndexForRestoredFiles } from "#/app/runner/git-refresh";
 import { currentInterruptSignal, runInterruptible } from "#/app/runner/interrupt";
+import { acquireLock } from "#/app/runner/lock";
 import { runShopifyCommand as runDefaultShopifyCommand } from "#/app/runner/shopify";
 import {
   createFileTransaction,
@@ -47,90 +48,89 @@ export async function devProject(options: DevOptions = {}): Promise<number> {
   const transactionPath = join(cwd, bshopifyStateDir, "extension-prepare.transaction.json");
 
   try {
-    if (lock.recoveredStaleLock) {
-      const restoredFiles = await restoreFileTransactionJournal(transactionPath);
-
-      if (restoredFiles.length > 0) {
+    return await withGitIndexLockGuard(cwd, async () => {
+      if (lock.recoveredStaleLock) {
+        const restoredFiles = await restoreFileTransactionJournal(transactionPath);
         await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
-      }
 
-      console.warn(
-        restoredFiles.length > 0
-          ? "Detected a stale Shopify extension prepare lock, likely from a killed dev process. Restored previous injections and cleaned it automatically."
-          : "Detected a stale Shopify extension prepare lock, likely from a killed dev process. Cleaned it automatically.",
-      );
-    }
-
-    const entries = await findManagedEntries(cwd, {
-      entryFileName: config.entryFileName,
-      extensionsRoot: config.extensionsRoot,
-    });
-    const hooks = await loadManagedEntryHooks(entries, { skipPlaceholders: true });
-    printSkippedPlaceholderEntries(entries.length - hooks.length);
-    const plans = await preparePlans(context, hooks);
-    await validatePlans(context, plans);
-
-    return await runInterruptible(async () => {
-      const transaction = await createFileTransaction(transactionPath);
-      const appliedInjections: AppliedInjection[] = [];
-      const injectionWarnings: InjectionWarning[] = [];
-
-      try {
-        for (const plan of plans) {
-          const result = await applyInjections(cwd, plan, transaction, {
-            mode: "dev",
-            restoreMarkers: config.restoreMarkers,
-          });
-          appliedInjections.push(...result.applied);
-          injectionWarnings.push(...result.warnings);
-        }
-
-        const warningSummary = formatInjectionWarnings(injectionWarnings, { cwd });
-
-        if (warningSummary !== undefined) {
-          console.warn(warningSummary);
-        }
-
-        const cliConfigName = getShopifyCliConfigName(context.configPath);
-        const injectionSummary = formatAppliedInjections(appliedInjections, {
-          configName: cliConfigName,
-          cwd,
-        });
-
-        if (injectionSummary !== undefined) {
-          console.log(injectionSummary);
-        }
-
-        if (config.failOnUnresolvedPlaceholders) {
-          await assertNoUnresolvedPlaceholders(cwd, config.extensionsRoot);
-        }
-
-        await refreshGitIndexForRestoredFiles(
-          cwd,
-          appliedInjections.map((injection) => injection.path),
+        console.warn(
+          restoredFiles.length > 0
+            ? "Detected a stale Shopify extension prepare lock, likely from a killed dev process. Restored previous injections and cleaned it automatically."
+            : "Detected a stale Shopify extension prepare lock, likely from a killed dev process. Cleaned it automatically.",
         );
-
-        if (currentInterruptSignal()?.aborted) {
-          return 0;
-        }
-
-        const runShopifyCommand =
-          options.runShopifyCommand ?? ((args) => runDefaultShopifyCommand(args, cwd));
-        const exitCode = await runShopifyCommand([
-          "app",
-          "dev",
-          ...formatShopifyCliForwardedArgs(context.configPath, shopifyArgs),
-        ]);
-
-        return exitCode ?? 0;
-      } finally {
-        const restoredFiles = await transaction.restore();
-        await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
-
-        if (appliedInjections.length > 0) {
-          console.log(formatRestoreNotice());
-        }
       }
+
+      const entries = await findManagedEntries(cwd, {
+        entryFileName: config.entryFileName,
+        extensionsRoot: config.extensionsRoot,
+      });
+      const hooks = await loadManagedEntryHooks(entries, { skipPlaceholders: true });
+      printSkippedPlaceholderEntries(entries.length - hooks.length);
+      const plans = await preparePlans(context, hooks);
+      await validatePlans(context, plans);
+
+      return await runInterruptible(async () => {
+        const transaction = await createFileTransaction(transactionPath);
+        const appliedInjections: AppliedInjection[] = [];
+        const injectionWarnings: InjectionWarning[] = [];
+
+        try {
+          for (const plan of plans) {
+            const result = await applyInjections(cwd, plan, transaction, {
+              mode: "dev",
+              restoreMarkers: config.restoreMarkers,
+            });
+            appliedInjections.push(...result.applied);
+            injectionWarnings.push(...result.warnings);
+          }
+
+          const warningSummary = formatInjectionWarnings(injectionWarnings, { cwd });
+
+          if (warningSummary !== undefined) {
+            console.warn(warningSummary);
+          }
+
+          const cliConfigName = getShopifyCliConfigName(context.configPath);
+          const injectionSummary = formatAppliedInjections(appliedInjections, {
+            configName: cliConfigName,
+            cwd,
+          });
+
+          if (injectionSummary !== undefined) {
+            console.log(injectionSummary);
+          }
+
+          if (config.failOnUnresolvedPlaceholders) {
+            await assertNoUnresolvedPlaceholders(cwd, config.extensionsRoot);
+          }
+
+          await refreshGitIndexForRestoredFiles(
+            cwd,
+            appliedInjections.map((injection) => injection.path),
+          );
+
+          if (currentInterruptSignal()?.aborted) {
+            return 0;
+          }
+
+          const runShopifyCommand =
+            options.runShopifyCommand ?? ((args) => runDefaultShopifyCommand(args, cwd));
+          const exitCode = await runShopifyCommand([
+            "app",
+            "dev",
+            ...formatShopifyCliForwardedArgs(context.configPath, shopifyArgs),
+          ]);
+
+          return exitCode ?? 0;
+        } finally {
+          const restoredFiles = await transaction.restore();
+          await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
+
+          if (appliedInjections.length > 0) {
+            console.log(formatRestoreNotice());
+          }
+        }
+      });
     });
   } finally {
     await lock.release();

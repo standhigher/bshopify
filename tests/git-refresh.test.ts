@@ -242,6 +242,19 @@ describe("refreshGitIndexForRestoredFiles", () => {
     await expect(refreshGitIndexForRestoredFiles(cwd, [targetPath])).resolves.toBeUndefined();
     await expect(readFile(targetPath, "utf8")).resolves.toBe(source);
   });
+
+  it("clears a leftover index.lock even when there are no files to refresh", async () => {
+    const cwd = await createFilteredRepo();
+    await git(cwd, ["add", "-A"]);
+    await git(cwd, ["commit", "-qm", "base"]);
+    await writeFile(join(cwd, ".git", "index.lock"), "");
+
+    await refreshGitIndexForRestoredFiles(cwd, []);
+
+    await expect(readFile(join(cwd, ".git", "index.lock"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
 });
 
 describe("transaction restore path reporting", () => {

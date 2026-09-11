@@ -2,12 +2,15 @@ import { execFile } from "node:child_process";
 import { isAbsolute, relative } from "node:path";
 import { promisify } from "node:util";
 import { recoverStaleGitIndexLock } from "./git-index-lock";
+import { currentInterruptSignal } from "./interrupt";
 
 const execFileAsync = promisify(execFile);
 
 const gitCommandTimeoutMs = 30_000;
 const gitIndexLockRetryMs = 200;
 const gitIndexLockRetryDeadlineMs = 5_000;
+const gitIndexLockReleaseRetries = 20;
+const gitIndexLockReleaseRetryMs = 100;
 
 /**
  * Refreshes the git index stat cache for files whose cleaned working tree
@@ -35,20 +38,23 @@ const gitIndexLockRetryDeadlineMs = 5_000;
  * never stages user work. Everything is best-effort and never fails the
  * surrounding dev/deploy/clear flow.
  *
- * `git add` takes `index.lock`. Stale locks are recovered first. Live lock
- * contention is retried for a few seconds. A timed-out `git add` is not
- * retried: the hung process is cleaned up once, then refresh gives up.
+ * `git add` takes `index.lock`. Stale locks are recovered first, including
+ * when there are no files to refresh (exit / crash leftover). Live lock
+ * contention is retried for a few seconds. A timed-out or interrupted
+ * `git add` is not retried: the hung process is killed, then the lock is
+ * recovered once the fd is gone.
  */
 export async function refreshGitIndexForRestoredFiles(
   cwd: string,
   restoredPaths: string[],
 ): Promise<void> {
-  if (restoredPaths.length === 0) {
-    return;
-  }
-
   try {
     await recoverStaleGitIndexLock(cwd);
+
+    if (restoredPaths.length === 0) {
+      return;
+    }
+
     const refreshable = await findRefreshableFiles(cwd, [...new Set(restoredPaths)]);
 
     if (refreshable.length > 0) {
@@ -56,6 +62,11 @@ export async function refreshGitIndexForRestoredFiles(
     }
   } catch {
     // Best effort: a git state refresh problem must not break the command.
+  } finally {
+    await recoverStaleGitIndexLock(cwd, {
+      retries: gitIndexLockReleaseRetries,
+      retryMs: gitIndexLockReleaseRetryMs,
+    }).catch(() => undefined);
   }
 }
 
@@ -69,8 +80,7 @@ async function addFilesToRefreshIndex(cwd: string, files: string[]): Promise<voi
       await execGit(cwd, ["add", "--", ...files]);
       return;
     } catch (error) {
-      if (isGitCommandTimeout(error)) {
-        await recoverStaleGitIndexLock(cwd);
+      if (isGitCommandTimeout(error) || isAbortError(error)) {
         warnGitIndexRefreshSkipped();
         return;
       }
@@ -119,9 +129,11 @@ async function listNulPaths(cwd: string, args: string[]): Promise<string[]> {
 }
 
 async function execGit(cwd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+  const signal = currentInterruptSignal();
   const { stdout, stderr } = await execFileAsync("git", ["-C", cwd, ...args], {
     encoding: "utf8",
     timeout: gitCommandTimeoutMs,
+    ...(signal === undefined ? {} : { signal }),
   });
 
   return { stderr, stdout };
@@ -138,6 +150,15 @@ function isGitCommandTimeout(error: unknown): boolean {
 
   const record = error as { killed?: unknown; signal?: unknown };
   return record.killed === true || record.signal === "SIGTERM" || record.signal === "SIGKILL";
+}
+
+function isAbortError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const record = error as { code?: unknown; name?: unknown };
+  return record.code === "ABORT_ERR" || record.name === "AbortError";
 }
 
 function gitErrorText(error: unknown): string {
