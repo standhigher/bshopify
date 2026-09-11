@@ -100,6 +100,34 @@ describe("refreshGitIndexForRestoredFiles", () => {
     await expect(readFile(targetPath, "utf8")).resolves.toBe(injected);
   });
 
+  it("clears a stale index.lock leftover and still hides live injections", async () => {
+    const cwd = await createFilteredRepo();
+    const targetPath = join(cwd, relTarget);
+    await mkdir(dirname(targetPath), { recursive: true });
+    await writeFile(targetPath, source);
+    await git(cwd, ["add", "-A"]);
+    await git(cwd, ["commit", "-qm", "placeholder"]);
+
+    const injected = injectedContent();
+    await writeFile(targetPath, injected);
+    await writeFile(join(cwd, ".git", "index.lock"), "");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      await refreshGitIndexForRestoredFiles(cwd, [targetPath]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect((await git(cwd, ["status", "--porcelain"])).stdout).toBe("");
+    expect((await git(cwd, ["diff", "--cached", "--stat"])).stdout).toBe("");
+    await expect(readFile(targetPath, "utf8")).resolves.toBe(injected);
+    await expect(readFile(join(cwd, ".git", "index.lock"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
   it("does not stage real user edits mixed into a live injection", async () => {
     const cwd = await createFilteredRepo();
     const targetPath = join(cwd, relTarget);
@@ -286,6 +314,9 @@ describe("app dev git status while injections are live", () => {
     await git(cwd, ["add", "-A"]);
     await git(cwd, ["commit", "-qm", "dev fixture"]);
     const headBlob = (await git(cwd, ["rev-parse", `HEAD:${targetRel}`])).stdout.trim();
+    // Leftover from a crashed `git add` during a previous session, matching
+    // the editor-visible "index.lock: File exists" failure.
+    await writeFile(join(cwd, ".git", "index.lock"), "");
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     try {
