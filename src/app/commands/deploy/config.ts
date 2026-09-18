@@ -1,4 +1,5 @@
 import { input, select } from "@inquirer/prompts";
+import { getShopifyCliConfigExclusiveFlag } from "#/app/runner/shopify-args";
 import { readRecordString } from "#/utils/objects";
 import type { RunnerConfig, RunnerContextBase } from "#/app/runner/types";
 
@@ -61,6 +62,18 @@ export async function requireProductionConfirmation(
   if (answer !== "confirm") {
     throw new Error("Production deploy requires --confirm-production.");
   }
+}
+
+export function assertDeployShopifyArgs(shopifyArgs: string[]): void {
+  const exclusiveFlag = getShopifyCliConfigExclusiveFlag(shopifyArgs);
+
+  if (exclusiveFlag === undefined) {
+    return;
+  }
+
+  throw new Error(
+    `Shopify CLI does not allow ${exclusiveFlag} together with --config. bshopify app deploy always selects a configFiles environment, so ${exclusiveFlag} is rejected. Reset with \`bshopify app dev --reset\`, then deploy with \`bshopify app deploy --config <key>\`.`,
+  );
 }
 
 export function assertShopifyDeployConfig(context: RunnerContextBase): void {

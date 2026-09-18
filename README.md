@@ -97,8 +97,8 @@ bshopify app deploy --config production   # deploy production directly
 | Command | Purpose |
 |-|-|
 | `bshopify app init` | Bootstrap. `--check` is read-only; `--cwd <path>` targets a directory |
-| `bshopify app dev` | Inject, then run `shopify app dev`. `-c` / `--config <key>` selects a `configFiles` environment (default `dev`) |
-| `bshopify app deploy` | Inject, then run `shopify app deploy`. `-c` / `--config`, `--dry-run`, `--yes`, `--confirm-production` |
+| `bshopify app dev` | Inject, then run `shopify app dev`. `-c` / `--config <key>` selects a `configFiles` environment (default `dev`). `--reset` / `--client-id` omit Shopify CLI `--config` and warn |
+| `bshopify app deploy` | Inject, then run `shopify app deploy`. `-c` / `--config`, `--dry-run`, `--yes`, `--confirm-production`. `--reset` / `--client-id` are rejected |
 | `bshopify app clear` | Remove generated files and restore the pre-bootstrap state. `--yes` skips confirmation |
 | Any other command | Passed through to the local Shopify CLI |
 
@@ -135,7 +135,7 @@ export default {
 
 Fields:
 
-- **`configFiles`**: environment name → a root-level `shopify.app.toml` or `shopify.app.<name>.toml`. `--config <key>` on `dev` / `deploy` selects by this key. The file name becomes the Shopify CLI `--config`, e.g. `shopify.app.preview.toml` → `shopify app dev --config preview`; `shopify.app.toml` is passed as `--config shopify.app.toml`.
+- **`configFiles`**: environment name → a root-level `shopify.app.toml` or `shopify.app.<name>.toml`. `--config <key>` on `dev` / `deploy` selects by this key. The file name becomes the Shopify CLI `--config`, e.g. `shopify.app.preview.toml` → `shopify app dev --config preview`; `shopify.app.toml` is passed as `--config shopify.app.toml`. Shopify CLI treats `--reset` and `--client-id` as exclusive with `--config`: `app dev` omits `--config` and warns which toml was used for injections (pick that file in the Shopify prompt); `app deploy` rejects those flags. `--reset=false` still forwards `--config`.
 - **`envFiles`** (optional): key → one or more JSON/TOML files relative to the project root. Each key becomes `ctx.<key>`; multiple files are shallow-merged in order, later files winning. A missing file only warns and is skipped.
 - **`failOnUnresolvedPlaceholders`**: fail when an injection leaves unresolved placeholders in a target file.
 

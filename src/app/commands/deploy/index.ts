@@ -1,11 +1,11 @@
 import { join } from "node:path";
 import { confirm } from "@inquirer/prompts";
 import { bshopifyStateDir } from "#/app/runner/constants";
+import { loadRunnerConfig } from "#/app/runner/config";
 import {
   formatShopifyCliForwardedArgs,
   getShopifyCliConfigName,
-  loadRunnerConfig,
-} from "#/app/runner/config";
+} from "#/app/runner/shopify-args";
 import { createRunnerContext } from "#/app/runner/context";
 import { printEnvFilesOutput } from "#/app/runner/env-files";
 import {
@@ -34,6 +34,7 @@ import {
   restoreFileTransactionJournal,
 } from "#/app/runner/transaction";
 import {
+  assertDeployShopifyArgs,
   assertShopifyDeployConfig,
   requireProductionConfirmation,
   resolveConfigName,
@@ -46,6 +47,7 @@ import type {
 } from "#/app/runner/types";
 
 export async function deployProject(options: DeployOptions = {}): Promise<number> {
+  assertDeployShopifyArgs(options.shopifyArgs ?? []);
   const cwd = options.cwd ?? process.cwd();
   const config = await loadRunnerConfig(cwd);
   const configName = await resolveConfigName(options.configName, config);

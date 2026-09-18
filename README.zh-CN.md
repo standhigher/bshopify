@@ -97,8 +97,8 @@ bshopify app deploy --config production   # 直接部署 production
 | 命令 | 用途 |
 |-|-|
 | `bshopify app init` | 接入项目。`--check` 只检查不写文件；`--cwd <path>` 指定目录 |
-| `bshopify app dev` | 注入后执行 `shopify app dev`。`-c` / `--config <key>` 选择 `configFiles` 环境，默认 `dev` |
-| `bshopify app deploy` | 注入后执行 `shopify app deploy`。`-c` / `--config`、`--dry-run`、`--yes`、`--confirm-production` |
+| `bshopify app dev` | 注入后执行 `shopify app dev`。`-c` / `--config <key>` 选择 `configFiles` 环境，默认 `dev`。`--reset` / `--client-id` 会省略 Shopify CLI 的 `--config` 并警告 |
+| `bshopify app deploy` | 注入后执行 `shopify app deploy`。`-c` / `--config`、`--dry-run`、`--yes`、`--confirm-production`。`--reset` / `--client-id` 会被拒绝 |
 | `bshopify app clear` | 删除 bshopify 生成文件，还原接入前状态。`--yes` 跳过确认 |
 | 其它命令 | 原样透传本机 Shopify CLI |
 
@@ -135,7 +135,7 @@ export default {
 
 常用字段：
 
-- **`configFiles`**：环境名 → 项目根目录的 `shopify.app.toml` 或 `shopify.app.<name>.toml`。`dev` / `deploy` 的 `--config <key>` 按这里选。文件名会转成传给 Shopify CLI 的 `--config`，例如 `shopify.app.preview.toml` → `shopify app dev --config preview`；`shopify.app.toml` 会传 `--config shopify.app.toml`。
+- **`configFiles`**：环境名 → 项目根目录的 `shopify.app.toml` 或 `shopify.app.<name>.toml`。`dev` / `deploy` 的 `--config <key>` 按这里选。文件名会转成传给 Shopify CLI 的 `--config`，例如 `shopify.app.preview.toml` → `shopify app dev --config preview`；`shopify.app.toml` 会传 `--config shopify.app.toml`。Shopify CLI 里 `--reset` / `--client-id` 不能和 `--config` 一起用：`app dev` 会省略 `--config` 并警告注入用了哪个 toml（提示里请选这个文件）；`app deploy` 会直接拒绝。`--reset=false` 仍会转发 `--config`。
 - **`envFiles`**（可选）：key → 一个或多个相对项目根的 JSON/TOML。每个 key 成为 `ctx.<key>`；多个文件按顺序浅合并，后者覆盖同名键。文件缺失只警告并跳过。
 - **`failOnUnresolvedPlaceholders`**：注入后若目标文件仍有未替换的占位符，是否直接失败。
 

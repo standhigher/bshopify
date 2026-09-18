@@ -443,6 +443,7 @@ describe("bshopify CLI", () => {
         join(process.cwd(), "src", "app", "runner", "injections.ts"),
         join(process.cwd(), "src", "app", "runner", "lock.ts"),
         join(process.cwd(), "src", "app", "runner", "shopify.ts"),
+        join(process.cwd(), "src", "app", "runner", "shopify-args.ts"),
         join(process.cwd(), "src", "app", "runner", "transaction.ts"),
         join(process.cwd(), "src", "app", "runner", "types.ts"),
       ]),
@@ -1329,13 +1330,29 @@ describe("devProject", () => {
     ]);
   });
 
-  it("forwards the default CLI config when passing Shopify args such as --reset", async () => {
+  it("forwards the default CLI config when passing compatible Shopify args", async () => {
     const cwd = await createDevProject();
     const runShopifyCommand = vi.fn(async () => 0);
 
-    await devProject({ cwd, runShopifyCommand, shopifyArgs: ["--reset"] });
+    await devProject({ cwd, runShopifyCommand, shopifyArgs: ["--verbose"] });
 
-    expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--config", "dev", "--reset"]);
+    expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--config", "dev", "--verbose"]);
+  });
+
+  it("omits --config when forwarding --reset because Shopify CLI forbids the combination", async () => {
+    const cwd = await createDevProject();
+    const runShopifyCommand = vi.fn(async () => 0);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      await devProject({ cwd, runShopifyCommand, shopifyArgs: ["--reset"] });
+      expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--reset"]);
+      expect(warn.mock.calls.map(([message]) => String(message)).join("\n")).toContain(
+        "Injections still used shopify.app.dev.toml",
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("forwards the selected config together with extra Shopify args", async () => {
@@ -1359,10 +1376,44 @@ describe("devProject", () => {
       configName: "test",
       cwd,
       runShopifyCommand,
-      shopifyArgs: ["--reset"],
+      shopifyArgs: ["--verbose"],
     });
 
-    expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--config", "test", "--reset"]);
+    expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--config", "test", "--verbose"]);
+  });
+
+  it("injects the selected config and omits --config when forwarding --reset", async () => {
+    const cwd = await createDevProject();
+    await writeFile(
+      join(cwd, "shopify.app.test.toml"),
+      [
+        'name = "fixture"',
+        'client_id = "client-id"',
+        "",
+        "[app_proxy]",
+        'prefix = "apps"',
+        'subpath = "fixture-test"',
+        'url = "https://example.test/proxy"',
+        "",
+      ].join("\n"),
+    );
+    const runShopifyCommand = vi.fn(async () => 0);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      await devProject({
+        configName: "test",
+        cwd,
+        runShopifyCommand,
+        shopifyArgs: ["--reset"],
+      });
+      expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--reset"]);
+      expect(warn.mock.calls.map(([message]) => String(message)).join("\n")).toContain(
+        "Injections still used shopify.app.test.toml",
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("ignores --config in extra Shopify args and keeps the selected config", async () => {
@@ -1374,9 +1425,9 @@ describe("devProject", () => {
       await devProject({
         cwd,
         runShopifyCommand,
-        shopifyArgs: ["--config", "test", "--reset"],
+        shopifyArgs: ["--config", "test", "--verbose"],
       });
-      expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--config", "dev", "--reset"]);
+      expect(runShopifyCommand).toHaveBeenCalledWith(["app", "dev", "--config", "dev", "--verbose"]);
       expect(warn.mock.calls.map(([message]) => String(message)).join("\n")).toContain(
         "Ignored --config / -c in extra Shopify args",
       );
@@ -1413,14 +1464,14 @@ describe("devProject", () => {
     );
     const runShopifyCommand = vi.fn(async () => 0);
 
-    await devProject({ cwd, runShopifyCommand, shopifyArgs: ["--reset"] });
+    await devProject({ cwd, runShopifyCommand, shopifyArgs: ["--verbose"] });
 
     expect(runShopifyCommand).toHaveBeenCalledWith([
       "app",
       "dev",
       "--config",
       "shopify.app.toml",
-      "--reset",
+      "--verbose",
     ]);
   });
 
@@ -1901,6 +1952,34 @@ describe("deployProject", () => {
 
     expect(exitCode).toBe(0);
     expect(runShopifyCommand).toHaveBeenCalledWith(["app", "deploy", "--config", "test"]);
+  });
+
+  it("rejects --reset because Shopify CLI cannot combine it with a selected config", async () => {
+    const runShopifyCommand = vi.fn(async () => 0);
+
+    await expect(
+      deployProject({
+        cwd: "/tmp/unused-shopify-app",
+        runShopifyCommand,
+        shopifyArgs: ["--reset"],
+        yes: true,
+      }),
+    ).rejects.toThrow("Shopify CLI does not allow --reset together with --config");
+    expect(runShopifyCommand).not.toHaveBeenCalled();
+  });
+
+  it("rejects --client-id because Shopify CLI cannot combine it with a selected config", async () => {
+    const runShopifyCommand = vi.fn(async () => 0);
+
+    await expect(
+      deployProject({
+        cwd: "/tmp/unused-shopify-app",
+        runShopifyCommand,
+        shopifyArgs: ["--client-id", "gid://shopify/App/1"],
+        yes: true,
+      }),
+    ).rejects.toThrow("Shopify CLI does not allow --client-id together with --config");
+    expect(runShopifyCommand).not.toHaveBeenCalled();
   });
 
   it("uses the configured config file name for app deploy context and Shopify CLI", async () => {

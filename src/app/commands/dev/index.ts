@@ -1,10 +1,10 @@
 import { join } from "node:path";
 import { bshopifyStateDir } from "#/app/runner/constants";
+import { loadRunnerConfig } from "#/app/runner/config";
 import {
   formatShopifyCliForwardedArgs,
   getShopifyCliConfigName,
-  loadRunnerConfig,
-} from "#/app/runner/config";
+} from "#/app/runner/shopify-args";
 import { createRunnerContext } from "#/app/runner/context";
 import { printEnvFilesOutput } from "#/app/runner/env-files";
 import {

@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { access, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { formatShopifyCliConfigArgs, getShopifyCliConfigName } from "#/app/runner/config";
+import { formatShopifyCliConfigArgs, getShopifyCliConfigName } from "#/app/runner/shopify-args";
 import { runShopifyCommand as runDefaultShopifyCommand } from "#/app/runner/shopify";
 import { isNodeError } from "#/utils/node";
 import { ansi, colorize } from "#/utils/output";
