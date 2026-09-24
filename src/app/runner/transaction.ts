@@ -49,11 +49,35 @@ export async function restoreFileTransactionJournal(journalPath: string): Promis
   return restored;
 }
 
+/**
+ * Drops an orphaned transaction journal left behind by a session that
+ * released its lock without cleaning the journal. Callers run this after
+ * restoring leftover markers while holding the prepare lock, so any journal
+ * on disk at that point is stale and safe to remove.
+ */
+export async function discardOrphanTransactionJournal(journalPath: string): Promise<void> {
+  await rm(journalPath, { force: true });
+}
+
 async function restoreTrackedFiles(files: TrackedFile[]): Promise<string[]> {
   const restored: string[] = [];
 
   for (const file of files.slice().reverse()) {
-    let content = await readFile(file.path, "utf8");
+    let content: string;
+
+    try {
+      content = await readFile(file.path, "utf8");
+    } catch (error) {
+      // A tracked file can disappear when the working branch no longer has it
+      // (for example after switching branches while dev/deploy is running).
+      // There is nothing to restore then, so skip it and keep restoring the
+      // remaining files instead of failing the whole restore.
+      if (isNodeError(error) && error.code === "ENOENT") {
+        continue;
+      }
+
+      throw error;
+    }
 
     // Marker path: reverse the injections recorded in the file itself. This
     // works even when the journal is lost or stale, because the marker

@@ -18,6 +18,7 @@ import {
 } from "../src/utils/markers";
 import {
   createFileTransaction,
+  discardOrphanTransactionJournal,
   restoreFileTransactionJournal,
 } from "../src/app/runner/transaction";
 
@@ -692,6 +693,103 @@ describe("transaction restore", () => {
     await restoreFileTransactionJournal(journalPath);
 
     await expect(readFile(filePath, "utf8")).resolves.toBe(source);
+  });
+
+  it("skips a tracked file that no longer exists and keeps restoring the rest", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-missing-"));
+    tempDirs.push(cwd);
+    const missingPath = join(cwd, "blocks", "removed.liquid");
+    const keptPath = join(cwd, "blocks", "app-embed.liquid");
+    await mkdir(join(cwd, "blocks"), { recursive: true });
+    const source = '<div data-api-base="__SHOPIFY_APP_PROXY_BASE__"></div>\n';
+    await writeFile(keptPath, source);
+
+    const journalPath = join(cwd, "transaction.json");
+    const transaction = await createFileTransaction(journalPath);
+    await transaction.writeFile(
+      missingPath,
+      inject(source, missingPath, "__SHOPIFY_APP_PROXY_BASE__", "https://proxy.example.com"),
+      {
+        marker: createFileMarker(
+          missingPath,
+          createRestoreMarker("__SHOPIFY_APP_PROXY_BASE__", "https://proxy.example.com"),
+        ),
+        pattern: "__SHOPIFY_APP_PROXY_BASE__",
+        value: "https://proxy.example.com",
+      },
+    );
+    await transaction.writeFile(
+      keptPath,
+      inject(source, keptPath, "__SHOPIFY_APP_PROXY_BASE__", "https://proxy.example.com"),
+      {
+        marker: createFileMarker(
+          keptPath,
+          createRestoreMarker("__SHOPIFY_APP_PROXY_BASE__", "https://proxy.example.com"),
+        ),
+        pattern: "__SHOPIFY_APP_PROXY_BASE__",
+        value: "https://proxy.example.com",
+      },
+    );
+
+    await rm(missingPath);
+
+    const restored = await transaction.restore();
+
+    expect(restored).toEqual([keptPath]);
+    await expect(readFile(keptPath, "utf8")).resolves.toBe(source);
+    await expect(readFile(journalPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("cleans the journal even when some journaled files are gone", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-missing-journal-"));
+    tempDirs.push(cwd);
+    const missingPath = join(cwd, "blocks", "removed.liquid");
+    const keptPath = join(cwd, "blocks", "app-embed.liquid");
+    await mkdir(join(cwd, "blocks"), { recursive: true });
+    const source = '<div data-api-base="__SHOPIFY_APP_PROXY_BASE__"></div>\n';
+    await writeFile(keptPath, source);
+    const journalPath = join(cwd, "transaction.json");
+    await writeFile(
+      journalPath,
+      `${JSON.stringify({
+        files: [
+          {
+            path: missingPath,
+            replacements: [
+              {
+                pattern: "__SHOPIFY_APP_PROXY_BASE__",
+                value: "https://proxy.example.com",
+              },
+            ],
+          },
+          {
+            path: keptPath,
+            replacements: [
+              {
+                pattern: "__SHOPIFY_APP_PROXY_BASE__",
+                value: "https://proxy.example.com",
+              },
+            ],
+          },
+        ],
+      })}\n`,
+    );
+
+    const restored = await restoreFileTransactionJournal(journalPath);
+
+    expect(restored).toEqual([keptPath]);
+    await expect(readFile(journalPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("discards an orphaned transaction journal", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-orphan-journal-"));
+    tempDirs.push(cwd);
+    const journalPath = join(cwd, "transaction.json");
+    await writeFile(journalPath, '{"files":[]}\n');
+
+    await discardOrphanTransactionJournal(journalPath);
+
+    await expect(readFile(journalPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 

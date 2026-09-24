@@ -112,3 +112,33 @@ function getMarkerSyntax(path: string): MarkerSyntax {
       return "block";
   }
 }
+
+/**
+ * File extensions whose files can carry an injection restore marker. Used to
+ * scope the leftover-marker scan to the text files bshopify actually injects
+ * into, skipping binaries and build artifacts. This mirrors the explicit
+ * cases of `getMarkerSyntax`; the `default` there only ever writes a block
+ * marker into unknown extensions, which are not injected in practice.
+ */
+const markerFileExtensions = new Set([
+  ".liquid",
+  ".html",
+  ".htm",
+  ".toml",
+  ".jsx",
+  ".tsx",
+  ".css",
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".ts",
+  ".mts",
+  ".cts",
+  ".scss",
+  ".sass",
+  ".less",
+]);
+
+export function isInjectionMarkerFile(path: string): boolean {
+  return markerFileExtensions.has(extname(path).toLowerCase());
+}

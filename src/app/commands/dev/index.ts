@@ -22,11 +22,16 @@ import {
 } from "#/app/runner/injections";
 import { withGitIndexLockGuard } from "#/app/runner/git-index-lock-guard";
 import { refreshGitIndexForRestoredFiles } from "#/app/runner/git-refresh";
+import {
+  formatLeftoverRestoreNotice,
+  restoreLeftoverInjectionMarkers,
+} from "#/app/runner/restore-leftovers";
 import { currentInterruptSignal, runInterruptible } from "#/app/runner/interrupt";
 import { acquireLock } from "#/app/runner/lock";
 import { runShopifyCommand as runDefaultShopifyCommand } from "#/app/runner/shopify";
 import {
   createFileTransaction,
+  discardOrphanTransactionJournal,
   restoreFileTransactionJournal,
 } from "#/app/runner/transaction";
 import { ansi, colorize } from "#/utils/output";
@@ -58,6 +63,17 @@ export async function devProject(options: DevOptions = {}): Promise<number> {
             ? "Detected a stale Shopify extension prepare lock, likely from a killed dev process. Restored previous injections and cleaned it automatically."
             : "Detected a stale Shopify extension prepare lock, likely from a killed dev process. Cleaned it automatically.",
         );
+      }
+
+      const leftoverPaths = await restoreLeftoverInjectionMarkers(cwd, config.extensionsRoot);
+      await refreshGitIndexForRestoredFiles(cwd, leftoverPaths);
+
+      if (leftoverPaths.length > 0) {
+        console.warn(formatLeftoverRestoreNotice(leftoverPaths.length));
+      }
+
+      if (!lock.recoveredStaleLock) {
+        await discardOrphanTransactionJournal(transactionPath);
       }
 
       const entries = await findManagedEntries(cwd, {
