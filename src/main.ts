@@ -6,6 +6,17 @@ import {
   shouldHandleAppHelpLocally,
   type AppCommandDependencies,
 } from "./app/commands";
+import {
+  createConfigCommand,
+  createUpgradeCommand,
+  type ConfigAutoupgradeDependencies,
+  type UpgradeDependencies,
+} from "./upgrade/commands";
+import {
+  maybeAutoUpgrade,
+  triggerAutoUpgrade,
+  type AutoUpgradeTriggerDependencies,
+} from "./upgrade/trigger";
 import { packageInfo } from "./utils/package-json";
 import { notifyIfOutdated } from "./utils/update-notifier";
 
@@ -16,9 +27,14 @@ export type ProcessRunner = (
   options: Options,
 ) => Promise<{ exitCode?: number }>;
 
-export interface CliDependencies extends AppCommandDependencies {
+export interface CliDependencies
+  extends AppCommandDependencies,
+    ConfigAutoupgradeDependencies,
+    UpgradeDependencies {
   notifyIfOutdated?: typeof notifyIfOutdated;
   runShopifyCommand?: ShopifyCommandRunner;
+  triggerAutoUpgrade?: (dependencies?: AutoUpgradeTriggerDependencies) => void;
+  maybeAutoUpgrade?: (dependencies?: AutoUpgradeTriggerDependencies) => Promise<void>;
 }
 
 export function createCliProgram(dependencies: CliDependencies = {}): Command {
@@ -32,6 +48,8 @@ export function createCliProgram(dependencies: CliDependencies = {}): Command {
     .showHelpAfterError();
 
   program.addCommand(createAppCommand(dependencies));
+  program.addCommand(createConfigCommand(dependencies));
+  program.addCommand(createUpgradeCommand(dependencies));
 
   return program;
 }
@@ -41,19 +59,32 @@ export async function runCli(
   dependencies: CliDependencies = {},
 ): Promise<void> {
   const args = argv.slice(2);
-  const checkForUpdate = dependencies.notifyIfOutdated ?? notifyIfOutdated;
-  await checkForUpdate({ args });
 
-  if (shouldHandleLocally(args)) {
-    await createCliProgram(dependencies).parseAsync(argv);
+  if (args[0] === "__auto-upgrade") {
+    const runWorker = dependencies.maybeAutoUpgrade ?? maybeAutoUpgrade;
+    await runWorker();
     return;
   }
 
-  const runShopify = dependencies.runShopifyCommand ?? runShopifyCommand;
-  const exitCode = await runShopify(args);
+  const checkForUpdate = dependencies.notifyIfOutdated ?? notifyIfOutdated;
+  await checkForUpdate({ args });
 
-  if (typeof exitCode === "number") {
-    process.exitCode = exitCode;
+  const fireAutoUpgrade = dependencies.triggerAutoUpgrade ?? triggerAutoUpgrade;
+
+  try {
+    if (shouldHandleLocally(args)) {
+      await createCliProgram(dependencies).parseAsync(argv);
+      return;
+    }
+
+    const runShopify = dependencies.runShopifyCommand ?? runShopifyCommand;
+    const exitCode = await runShopify(args);
+
+    if (typeof exitCode === "number") {
+      process.exitCode = exitCode;
+    }
+  } finally {
+    fireAutoUpgrade({ args });
   }
 }
 
@@ -91,11 +122,11 @@ function shouldHandleLocally(args: string[]): boolean {
     return shouldHandleHelpLocally(args.slice(1));
   }
 
-  if (command !== "app") {
-    return false;
+  if (command === "app") {
+    return shouldHandleAppCommandLocally(args.slice(1));
   }
 
-  return shouldHandleAppCommandLocally(args.slice(1));
+  return localTopLevelCommands.has(command);
 }
 
 function isHelpOrVersionOption(value: string): boolean {
@@ -109,12 +140,14 @@ function shouldHandleHelpLocally(args: string[]): boolean {
     return true;
   }
 
-  if (command !== "app") {
-    return false;
+  if (command === "app") {
+    return shouldHandleAppHelpLocally(args.slice(1));
   }
 
-  return shouldHandleAppHelpLocally(args.slice(1));
+  return localTopLevelCommands.has(command);
 }
+
+const localTopLevelCommands = new Set(["app", "config", "upgrade"]);
 
 function isHelpOption(value: string): boolean {
   return value === "--help" || value === "-h";

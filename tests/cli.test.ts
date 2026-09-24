@@ -270,7 +270,7 @@ describe("bshopify CLI", () => {
       .sort();
     const appCommand = program.commands.find((command) => command.name() === "app");
 
-    expect(commands).toEqual(["app"]);
+    expect(commands).toEqual(["app", "config", "upgrade"]);
     expect(appCommand?.commands.map((command) => command.name()).sort()).toEqual([
       "clear",
       "deploy",

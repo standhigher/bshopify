@@ -5,8 +5,20 @@ export { deployProject } from "./app/commands/deploy";
 export { devProject } from "./app/commands/dev";
 export { formatInitResult, initProject } from "./app/commands/init";
 export { defineConfig } from "./app/runner/config";
+export { getAutoUpgradeEnabled, setAutoUpgradeEnabled } from "./upgrade/auto-upgrade-state";
+export { createConfigCommand, createUpgradeCommand, runUpgrade } from "./upgrade/commands";
+export {
+  maybeAutoUpgrade,
+  spawnDetachedAutoUpgradeWorker,
+  triggerAutoUpgrade,
+} from "./upgrade/trigger";
 
 export type { CliDependencies, ProcessRunner, ShopifyCommandRunner } from "./main";
+export type {
+  ConfigAutoupgradeDependencies,
+  UpgradeDependencies,
+} from "./upgrade/commands";
+export type { AutoUpgradeTriggerDependencies } from "./upgrade/trigger";
 export type { PackageInfo } from "./utils/package-json";
 export type { ClearOptions, ClearResult } from "./app/commands/clear/types";
 export type { DeployOptions } from "./app/runner/types";

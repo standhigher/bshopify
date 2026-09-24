@@ -17,6 +17,7 @@ Only extension environment awareness is available today. New capabilities will b
 | Capability | Status | Description |
 |-|-|-|
 | Extension environment awareness | Available | Reads the current `shopify.app*.toml` and injects it into extensions during `dev` / `deploy` |
+| Auto-upgrade | Available | Checks for a newer version after each command and updates automatically once per day (default on); `bshopify config autoupgrade off` disables it, `bshopify upgrade` updates manually |
 | Multi-theme | Planned | Shopify multi-theme workflows |
 
 ## Requirements
@@ -100,6 +101,8 @@ bshopify app deploy --config production   # deploy production directly
 | `bshopify app dev` | Inject, then run `shopify app dev`. `-c` / `--config <key>` selects a `configFiles` environment (default `dev`). `--reset` / `--client-id` omit Shopify CLI `--config` and warn |
 | `bshopify app deploy` | Inject, then run `shopify app deploy`. `-c` / `--config`, `--dry-run`, `--yes`, `--confirm-production`. `--reset` / `--client-id` are rejected |
 | `bshopify app clear` | Remove generated files and restore the pre-bootstrap state. `--yes` skips confirmation |
+| `bshopify config autoupgrade on\|off\|status` | Enable / disable / report automatic upgrades (default on) |
+| `bshopify upgrade` | Upgrade bshopify to the latest version manually |
 | Any other command | Passed through to the local Shopify CLI |
 
 ## Configuration example

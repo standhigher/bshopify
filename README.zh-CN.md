@@ -17,6 +17,7 @@
 | 能力 | 状态 | 说明 |
 |-|-|-|
 | Extension 环境感知 | 已实现 | 感知当前环境的 `shopify.app*.toml`，在 `dev` / `deploy` 时把配置注入到 extension |
+| 自动升级 | 已实现 | 每条命令结束后检查新版本，落后且距上次自动升级超过 24 小时时后台自动更新（默认开启）；`bs config autoupgrade off` 关闭，`bs upgrade` 手动升级 |
 | 多 Theme | 规划中 | 支持 Shopify 多 theme 工作流 |
 
 ## 环境要求
@@ -100,6 +101,8 @@ bshopify app deploy --config production   # 直接部署 production
 | `bshopify app dev` | 注入后执行 `shopify app dev`。`-c` / `--config <key>` 选择 `configFiles` 环境，默认 `dev`。`--reset` / `--client-id` 会省略 Shopify CLI 的 `--config` 并警告 |
 | `bshopify app deploy` | 注入后执行 `shopify app deploy`。`-c` / `--config`、`--dry-run`、`--yes`、`--confirm-production`。`--reset` / `--client-id` 会被拒绝 |
 | `bshopify app clear` | 删除 bshopify 生成文件，还原接入前状态。`--yes` 跳过确认 |
+| `bshopify config autoupgrade on\|off\|status` | 开启 / 关闭 / 查看自动升级（默认开启） |
+| `bshopify upgrade` | 手动升级 bshopify 到最新版 |
 | 其它命令 | 原样透传本机 Shopify CLI |
 
 ## 配置示例
