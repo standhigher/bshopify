@@ -1,10 +1,7 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { isAbsolute, relative } from "node:path";
-import { promisify } from "node:util";
 import { recoverStaleGitIndexLock } from "./git-index-lock";
 import { currentInterruptSignal } from "./interrupt";
-
-const execFileAsync = promisify(execFile);
 
 const gitCommandTimeoutMs = 30_000;
 const gitIndexLockRetryMs = 200;
@@ -130,13 +127,47 @@ async function listNulPaths(cwd: string, args: string[]): Promise<string[]> {
 
 async function execGit(cwd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   const signal = currentInterruptSignal();
-  const { stdout, stderr } = await execFileAsync("git", ["-C", cwd, ...args], {
-    encoding: "utf8",
+  // During injection the abort signal is armed and stops a hung git promptly.
+  // Outside an injection session (startup cleanup, and the restore phase
+  // running inside `runWithoutInterrupt`) there is no signal, so detach the
+  // git child from the foreground process group instead: a repeated Ctrl+C
+  // still delivers SIGINT to the whole group, and without detaching it would
+  // kill `git add` mid-refresh and leave the phantom "modified" (empty-diff)
+  // entry behind. `spawn` honors `detached` (unlike `execFile`).
+  const child = spawn("git", ["-C", cwd, ...args], {
     timeout: gitCommandTimeoutMs,
-    ...(signal === undefined ? {} : { signal }),
+    stdio: ["ignore", "pipe", "pipe"],
+    ...(signal === undefined ? { detached: true } : { signal }),
   });
 
-  return { stderr, stdout };
+  return await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code, closeSignal) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+
+      const error = new Error(`Command failed: git -C ${cwd} ${args.join(" ")}`);
+      Object.assign(error, {
+        code,
+        killed: child.killed,
+        signal: closeSignal,
+        stderr,
+      });
+      reject(error);
+    });
+  });
 }
 
 function isGitIndexLockError(error: unknown): boolean {

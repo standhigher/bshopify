@@ -152,6 +152,34 @@ describe("app dev git status after SIGINT", () => {
     expect(status.code).toBe(0);
     expect(status.stdout).toBe("");
   }, 20_000);
+
+  it("keeps Source Control clean after a repeated Ctrl+C during dev", async () => {
+    const project = await createInterruptProject();
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const child = spawnCliDetached(["app", "dev", "--cwd", project.cwd], project.readyFile);
+
+    await waitForInjectedCli(child, project);
+    // Simulate a terminal Ctrl+C delivering SIGINT to the whole process group,
+    // pressed a few times like `^C^C`: the extra signals must not kill the
+    // restore-phase `git add` and leave the phantom change behind. The child
+    // is detached so its pid is its process-group id; kill(-pid) targets the
+    // whole group (CLI + shopify), and ESRCH just means it already exited.
+    signalGroup(child.pid);
+    for (let i = 0; i < 4; i += 1) {
+      await delay(20);
+      signalGroup(child.pid);
+    }
+    const result = await child;
+
+    expect(result.exitCode).toBe(130);
+    await expect(readFile(project.targetPath, "utf8")).resolves.toBe(project.placeholder);
+    await expectMissing(project.lockPath);
+    await expectMissing(project.journalPath);
+    const status = await git(project.cwd, ["status", "--porcelain", "--", project.targetRel]);
+    expect(status.code).toBe(0);
+    expect(status.stdout).toBe("");
+  }, 20_000);
 });
 
 interface InterruptProject {
@@ -277,6 +305,20 @@ function spawnCli(args: string[], readyFile: string) {
   });
 }
 
+function spawnCliDetached(args: string[], readyFile: string) {
+  return execa(process.execPath, ["--import", "tsx/esm", cliEntry, ...args], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      BSHOPIFY_INTERRUPT_HOLD_MS: "30000",
+      BSHOPIFY_INTERRUPT_READY_FILE: readyFile,
+    },
+    extendEnv: true,
+    reject: false,
+    detached: true,
+  });
+}
+
 async function waitForInjectedCli(
   child: ReturnType<typeof execa>,
   project: InterruptProject,
@@ -331,4 +373,18 @@ async function pathExists(path: string): Promise<boolean> {
 
 async function expectMissing(path: string): Promise<void> {
   await expect(readFile(path, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+}
+
+function signalGroup(pid: number | undefined): void {
+  if (pid === undefined) {
+    return;
+  }
+
+  try {
+    process.kill(-pid, "SIGINT");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
+      throw error;
+    }
+  }
 }
