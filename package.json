@@ -1,6 +1,6 @@
 {
   "name": "@standhigher/bshopify",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Standhigher Shopify App Runner CLI.",
   "license": "MIT",
   "type": "module",
