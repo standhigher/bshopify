@@ -26,7 +26,11 @@ import {
   formatLeftoverRestoreNotice,
   restoreLeftoverInjectionMarkers,
 } from "#/app/runner/restore-leftovers";
-import { currentInterruptSignal, runInterruptible } from "#/app/runner/interrupt";
+import {
+  currentInterruptSignal,
+  runInterruptible,
+  runWithoutInterrupt,
+} from "#/app/runner/interrupt";
 import { acquireLock } from "#/app/runner/lock";
 import { runShopifyCommand as runDefaultShopifyCommand } from "#/app/runner/shopify";
 import {
@@ -139,12 +143,14 @@ export async function devProject(options: DevOptions = {}): Promise<number> {
 
           return exitCode ?? 0;
         } finally {
-          const restoredFiles = await transaction.restore();
-          await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
+          await runWithoutInterrupt(async () => {
+            const restoredFiles = await transaction.restore();
+            await refreshGitIndexForRestoredFiles(cwd, restoredFiles);
 
-          if (appliedInjections.length > 0) {
-            console.log(formatRestoreNotice());
-          }
+            if (appliedInjections.length > 0) {
+              console.log(formatRestoreNotice());
+            }
+          });
         }
       });
     });

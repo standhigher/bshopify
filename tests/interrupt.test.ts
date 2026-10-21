@@ -8,7 +8,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { execa } from "execa";
 import { composeInjection } from "../src/app/runner/compose-injection";
 import {
+  currentInterruptSignal,
   runInterruptible,
+  runWithoutInterrupt,
   withInterruptProtection,
   type InterruptListenerHost,
 } from "../src/app/runner/interrupt";
@@ -73,6 +75,23 @@ describe("runInterruptible", () => {
     expect(host.listenerCount("SIGINT")).toBe(0);
     expect(host.listenerCount("SIGTERM")).toBe(0);
     expect(host.listenerCount("SIGHUP")).toBe(0);
+  });
+});
+
+describe("runWithoutInterrupt", () => {
+  it("clears the interrupt signal inside even when the session is aborted", async () => {
+    const host = new EventEmitter() as InterruptListenerHost & EventEmitter;
+
+    await withInterruptProtection(async () => {
+      host.emit("SIGINT", "SIGINT");
+      expect(currentInterruptSignal()?.aborted).toBe(true);
+
+      await runWithoutInterrupt(async () => {
+        expect(currentInterruptSignal()).toBeUndefined();
+      });
+
+      expect(currentInterruptSignal()?.aborted).toBe(true);
+    }, host);
   });
 });
 

@@ -27,11 +27,30 @@ const interruptExitCodes: Record<InterruptSignal, number> = {
   SIGTERM: 143,
 };
 
-const interruptStorage = new AsyncLocalStorage<InterruptState>();
+const interruptStorage = new AsyncLocalStorage<InterruptState | undefined>();
 
 /** AbortSignal for the current injection session, if one is running. */
 export function currentInterruptSignal(): AbortSignal | undefined {
   return interruptStorage.getStore()?.controller.signal;
+}
+
+/**
+ * Runs `work` with no active interrupt session, so `currentInterruptSignal()`
+ * returns `undefined` inside it even when the caller is already mid-interrupt.
+ *
+ * Cleanup that must finish after a Ctrl+C (restoring injections, refreshing
+ * the git index) uses this instead of consulting the already-aborted signal:
+ * the abort means "stop the Shopify child", not "abandon the restore".
+ *
+ * Only the AsyncLocalStorage store is cleared — the OS signal listeners stay
+ * registered. A repeated Ctrl+C during the restore is therefore a no-op on the
+ * already-aborted controller and cannot force-quit the cleanup, which is the
+ * point. The terminal still signals the whole process group, so a git child
+ * spawned here can be killed by it; the index refresh treats that as
+ * best-effort.
+ */
+export async function runWithoutInterrupt<T>(work: () => Promise<T>): Promise<T> {
+  return await interruptStorage.run(undefined, work);
 }
 
 /**
