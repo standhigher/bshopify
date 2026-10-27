@@ -2,6 +2,17 @@
   "name": "@standhigher/bshopify",
   "version": "0.2.3",
   "description": "Standhigher Shopify App Runner CLI.",
+  "keywords": [
+    "shopify",
+    "shopify-cli",
+    "shopify-app",
+    "shopify-extensions",
+    "cli",
+    "developer-tools",
+    "environment",
+    "configuration",
+    "bshopify"
+  ],
   "license": "MIT",
   "type": "module",
   "bin": {
