@@ -206,6 +206,7 @@ async function createInterruptProject(): Promise<InterruptProject> {
   const scriptPath = join(cwd, ".bshopify", "git-add-cleaner.js");
   await mkdir(dirname(scriptPath), { recursive: true });
   await writeFile(scriptPath, cleanFilterScript);
+  await writeFile(join(cwd, ".bshopify", "bshopify.manifest.json"), "{\"version\":1}\n");
   await git(cwd, ["config", "filter.bshopify.clean", `node ${scriptPath}`]);
   await git(cwd, ["config", "filter.bshopify.smudge", `node ${scriptPath} --smudge`]);
   await git(cwd, ["config", "filter.bshopify.required", "false"]);

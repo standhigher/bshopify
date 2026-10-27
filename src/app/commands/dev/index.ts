@@ -38,12 +38,14 @@ import {
   discardOrphanTransactionJournal,
   restoreFileTransactionJournal,
 } from "#/app/runner/transaction";
+import { assertProjectInitialized } from "#/app/commands/init/ready";
 import { ansi, colorize } from "#/utils/output";
 import type { AppliedInjection, InjectionWarning } from "#/app/runner/injections";
 import type { DevOptions } from "#/app/runner/types";
 
 export async function devProject(options: DevOptions = {}): Promise<number> {
   const cwd = options.cwd ?? process.cwd();
+  await assertProjectInitialized(cwd);
   const configName = options.configName ?? "dev";
   const shopifyArgs = options.shopifyArgs ?? [];
   const config = await loadRunnerConfig(cwd);

@@ -48,6 +48,7 @@ async function createFilteredRepo(): Promise<string> {
   const scriptPath = join(cwd, ".bshopify", "git-add-cleaner.js");
   await mkdir(dirname(scriptPath), { recursive: true });
   await writeFile(scriptPath, cleanFilterScript);
+  await writeFile(join(cwd, ".bshopify", "bshopify.manifest.json"), "{\"version\":1}\n");
   await git(cwd, ["init", "-q"]);
   await git(cwd, ["config", "user.email", "t@t.co"]);
   await git(cwd, ["config", "user.name", "t"]);

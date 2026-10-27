@@ -5,6 +5,7 @@ import {
   formatInitResult,
   initProject,
 } from "./init";
+import { assertProjectInitialized } from "./init/ready";
 import { devProject } from "./dev";
 import type { ClearOptions, ClearResult } from "./clear/types";
 import type { InitOptions, InitResult } from "./init/types";
@@ -119,7 +120,9 @@ export function createAppCommand(dependencies: AppCommandDependencies = {}): Com
   appCommand
     .command("guard")
     .description("Prevent unsafe injected values or active locks from being committed.")
-    .action(() => undefined);
+    .action(async () => {
+      await assertProjectInitialized(process.cwd());
+    });
 
   return appCommand;
 }

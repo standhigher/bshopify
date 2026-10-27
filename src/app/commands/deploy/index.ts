@@ -43,6 +43,7 @@ import {
   discardOrphanTransactionJournal,
   restoreFileTransactionJournal,
 } from "#/app/runner/transaction";
+import { assertProjectInitialized } from "#/app/commands/init/ready";
 import {
   assertDeployShopifyArgs,
   assertShopifyDeployConfig,
@@ -57,8 +58,9 @@ import type {
 } from "#/app/runner/types";
 
 export async function deployProject(options: DeployOptions = {}): Promise<number> {
-  assertDeployShopifyArgs(options.shopifyArgs ?? []);
   const cwd = options.cwd ?? process.cwd();
+  await assertProjectInitialized(cwd);
+  assertDeployShopifyArgs(options.shopifyArgs ?? []);
   const config = await loadRunnerConfig(cwd);
   const configName = await resolveConfigName(options.configName, config);
   const dryRun = options.dryRun === true;

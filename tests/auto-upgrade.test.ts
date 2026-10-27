@@ -19,6 +19,7 @@ import {
   triggerAutoUpgrade,
   type AutoUpgradeTriggerDependencies,
 } from "../src/upgrade/trigger";
+import { projectNotInitializedMessage } from "../src/app/commands/init/ready";
 import { createCliProgram, runCli } from "../src/main";
 
 const tempDirs: string[] = [];
@@ -329,14 +330,23 @@ describe("spawnDetachedAutoUpgradeWorker", () => {
 
 describe("runCli auto-upgrade wiring", () => {
   it("fires the trigger after a local command", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-guard-"));
+    tempDirs.push(cwd);
+    const previous = process.cwd();
     const trigger = vi.fn();
+    process.chdir(cwd);
 
-    await runCli(["node", "bshopify", "app", "guard"], {
-      notifyIfOutdated: async () => undefined,
-      triggerAutoUpgrade: trigger,
-    });
-
-    expect(trigger).toHaveBeenCalledWith({ args: ["app", "guard"] });
+    try {
+      await expect(
+        runCli(["node", "bshopify", "app", "guard"], {
+          notifyIfOutdated: async () => undefined,
+          triggerAutoUpgrade: trigger,
+        }),
+      ).rejects.toThrow(projectNotInitializedMessage(process.cwd()));
+      expect(trigger).toHaveBeenCalledWith({ args: ["app", "guard"] });
+    } finally {
+      process.chdir(previous);
+    }
   });
 
   it("fires the trigger after a Shopify passthrough command", async () => {

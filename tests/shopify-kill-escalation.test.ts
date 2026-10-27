@@ -85,6 +85,9 @@ async function createRunnerProject(): Promise<RunnerProject> {
   const targetPath = join(cwd, "extensions", "theme-extension", "blocks", "app-embed.liquid");
 
   await writeFile(join(cwd, "package.json"), `${JSON.stringify({ type: "module" })}\n`);
+  await mkdir(join(cwd, ".bshopify"), { recursive: true });
+  await writeFile(join(cwd, ".bshopify", "bshopify.manifest.json"), "{\"version\":1}\n");
+  await writeFile(join(cwd, "bshopify.config.mjs"), "export default {};\n");
   await writeFile(join(cwd, "shopify.app.dev.toml"), shopifyToml("https://dev.example.com", "fixture-dev"));
 
   await mkdir(dirname(targetPath), { recursive: true });

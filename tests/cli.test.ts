@@ -24,6 +24,7 @@ vi.mock("@inquirer/prompts", async (importOriginal) => {
 
 import { createAppCommand } from "../src/app/commands";
 import { formatDeploySummary } from "../src/app/commands/deploy/summary";
+import { projectNotInitializedMessage } from "../src/app/commands/init/ready";
 import { formatCliError } from "../src/utils/output";
 import {
   createCliProgram,
@@ -78,6 +79,9 @@ async function createDevProject(): Promise<string> {
   tempDirs.push(cwd);
 
   await writeFile(join(cwd, "package.json"), `${JSON.stringify({ type: "module" })}\n`);
+  await mkdir(join(cwd, ".bshopify"), { recursive: true });
+  await writeFile(join(cwd, ".bshopify", "bshopify.manifest.json"), "{\"version\":1}\n");
+  await writeFile(join(cwd, "bshopify.config.mjs"), "export default {};\n");
   await writeFile(
     join(cwd, "shopify.app.dev.toml"),
     [
@@ -703,14 +707,23 @@ describe("bshopify CLI", () => {
   });
 
   it("keeps the generated pre-commit app guard command local", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "bshopify-guard-"));
+    tempDirs.push(cwd);
+    const previous = process.cwd();
     const runShopifyCommand = vi.fn(async () => 0);
+    process.chdir(cwd);
 
-    await runCli(["node", "bshopify", "app", "guard"], {
-      notifyIfOutdated: async () => undefined,
-      runShopifyCommand,
-    });
-
-    expect(runShopifyCommand).not.toHaveBeenCalled();
+    try {
+      await expect(
+        runCli(["node", "bshopify", "app", "guard"], {
+          notifyIfOutdated: async () => undefined,
+          runShopifyCommand,
+        }),
+      ).rejects.toThrow(projectNotInitializedMessage(process.cwd()));
+      expect(runShopifyCommand).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(previous);
+    }
   });
 
   it("falls back top-level guard to Shopify because guard is app-scoped", async () => {
@@ -1955,11 +1968,12 @@ describe("deployProject", () => {
   });
 
   it("rejects --reset because Shopify CLI cannot combine it with a selected config", async () => {
+    const cwd = await createDevProject();
     const runShopifyCommand = vi.fn(async () => 0);
 
     await expect(
       deployProject({
-        cwd: "/tmp/unused-shopify-app",
+        cwd,
         runShopifyCommand,
         shopifyArgs: ["--reset"],
         yes: true,
@@ -1969,11 +1983,12 @@ describe("deployProject", () => {
   });
 
   it("rejects --client-id because Shopify CLI cannot combine it with a selected config", async () => {
+    const cwd = await createDevProject();
     const runShopifyCommand = vi.fn(async () => 0);
 
     await expect(
       deployProject({
-        cwd: "/tmp/unused-shopify-app",
+        cwd,
         runShopifyCommand,
         shopifyArgs: ["--client-id", "gid://shopify/App/1"],
         yes: true,

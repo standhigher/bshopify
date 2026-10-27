@@ -205,4 +205,5 @@ export default {
 
 ## Changelog
 
-See [0.1.x](./docs/changelog/0.1.md).
+- [0.2.x](./docs/changelog/0.2.md)
+- [0.1.x](./docs/changelog/0.1.md)
